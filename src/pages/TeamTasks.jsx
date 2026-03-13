@@ -114,6 +114,17 @@ const TeamTasks = () => {
         createdBy: currentUser.uid,
         createdAt: serverTimestamp(),
       });
+
+      // Notify the assignee about their new task
+      await addDoc(collection(db, 'notifications'), {
+        userId: newTaskAssignee,
+        type: 'task_assigned',
+        title: 'New Task Assigned',
+        message: `You were assigned "${newTaskTitle.trim()}" in ${team.teamName}.`,
+        link: `/team/${id}/tasks`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
       
       // Reset form
       setNewTaskTitle('');
@@ -137,6 +148,21 @@ const TeamTasks = () => {
        }
        
        await updateDoc(taskRef, updateData);
+
+       // Notify the assignee about the status change
+       const updatedTaskSnapshot = await getDoc(taskRef);
+       const updatedTask = updatedTaskSnapshot.exists() ? updatedTaskSnapshot.data() : null;
+       if (updatedTask && updatedTask.assignedTo) {
+         await addDoc(collection(db, 'notifications'), {
+           userId: updatedTask.assignedTo,
+           type: 'task_updated',
+           title: 'Task Status Updated',
+           message: `${currentUser.displayName || 'Someone'} marked "${updatedTask.title}" as ${newStatus.replace('-', ' ')}.`,
+           link: `/team/${id}/tasks`,
+           isRead: false,
+           createdAt: serverTimestamp(),
+         });
+       }
      } catch (err) {
        console.error("Error updating status", err);
        alert("Failed to update status.");

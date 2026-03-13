@@ -92,6 +92,23 @@ const TeamChat = () => {
         senderName: currentUser.displayName || 'Anonymous Member',
         createdAt: serverTimestamp()
       });
+
+      // Create notifications for other team members
+      const notificationPromises = (team.members || [])
+        .filter((memberId) => memberId !== currentUser.uid)
+        .map((memberId) =>
+          addDoc(collection(db, 'notifications'), {
+            userId: memberId,
+            type: 'new_message',
+            title: `New message from ${currentUser.displayName || 'a teammate'}`,
+            message: `${currentUser.displayName || 'Someone'} sent a message in ${team.teamName}.`,
+            link: `/team/${team.id}/chat`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          })
+        );
+
+      await Promise.all(notificationPromises);
     } catch (err) {
       console.error("Failed to send message:", err);
       throw err; // Re-throw to be handled by ChatInput

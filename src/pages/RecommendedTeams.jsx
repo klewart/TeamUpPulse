@@ -4,13 +4,14 @@ import { db } from '../services/firebase';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import MatchTeamCard from '../components/MatchTeamCard';
-import { calculateSkillMatch } from '../utils/matchUtils';
+import { calculateSkillMatch, categorizeSkillset } from '../utils/matchUtils';
 import { Link } from 'react-router-dom';
 
 const RecommendedTeams = () => {
   const { currentUser } = useAuth();
   const [recommendedTeams, setRecommendedTeams] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
+  const [userCategory, setUserCategory] = useState('fullstack');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,11 +46,8 @@ const RecommendedTeams = () => {
         return;
       }
 
-      // 2. Fetch all teams
-      const teamsRef = collection(db, 'teams');
-      const teamsSnap = await getDocs(teamsRef);
-      
-      const processedTeams = [];
+      const category = categorizeSkillset(userSkills);
+      setUserCategory(category);
 
       teamsSnap.forEach((doc) => {
         const teamData = doc.data();
@@ -60,19 +58,28 @@ const RecommendedTeams = () => {
         const isFull = teamData.members?.length >= teamData.maxMembers;
         
         if (!isMember && !isCreator && !isFull) {
+          // Determine category (frontend/backend/fullstack) for this team as well
+          const teamCategory = categorizeSkillset(teamData.requiredSkills || []);
+
           // Calculate match
           const matchResult = calculateSkillMatch(userSkills, teamData.requiredSkills || []);
           
           processedTeams.push({
             id: doc.id,
             ...teamData,
-            matchResult
+            matchResult,
+            category: teamCategory
           });
         }
       });
 
-      // 3. Sort by match score descending
-      processedTeams.sort((a, b) => b.matchResult.score - a.matchResult.score);
+      // 3. Sort by category match first (e.g., backend vs frontend), then score descending
+      processedTeams.sort((a, b) => {
+        const aMatch = a.category === category ? 0 : 1;
+        const bMatch = b.category === category ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return b.matchResult.score - a.matchResult.score;
+      });
       
       setRecommendedTeams(processedTeams);
     } catch (err) {
@@ -111,6 +118,11 @@ const RecommendedTeams = () => {
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Smart Matches</h1>
           <p className="text-slate-600 mt-1">Teams looking for your exact skillset.</p>
+          <p className="mt-2 text-sm font-medium text-slate-500">
+            Recommended track: <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">
+              {userCategory === 'backend' ? 'Backend' : userCategory === 'frontend' ? 'Frontend' : 'Fullstack'}
+            </span>
+          </p>
         </div>
       </div>
 
@@ -153,6 +165,7 @@ const RecommendedTeams = () => {
               <MatchTeamCard 
                 team={team} 
                 matchResult={team.matchResult}
+                category={team.category}
                 currentUserId={currentUser?.uid} 
                 onJoinRequest={handleJoinTeam} 
               />
