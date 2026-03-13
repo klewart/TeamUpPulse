@@ -37,38 +37,8 @@ const BrowseTeams = () => {
     }
   };
 
-  const handleJoinTeam = async (teamId) => {
-    if (!currentUser) return;
-    
-    try {
-      setJoiningId(teamId);
-      const teamRef = doc(db, 'teams', teamId);
-      
-      // Update firestore document to include user in members array
-      await updateDoc(teamRef, {
-        members: arrayUnion(currentUser.uid)
-      });
-      
-      // Update local state to reflect UI instantly
-      setTeams(prevTeams => 
-        prevTeams.map(team => {
-          if (team.id === teamId) {
-            return {
-              ...team,
-              members: [...(team.members || []), currentUser.uid]
-            };
-          }
-          return team;
-        })
-      );
-      
-    } catch (err) {
-      alert('Failed to join team: ' + err.message);
-    } finally {
-      setJoiningId(null);
-    }
-  };
-
+  // handleJoinTeam removed because joining is strictly handled on TeamDetails.jsx now
+  
   const filteredTeams = teams.filter(team => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -121,10 +91,10 @@ const BrowseTeams = () => {
                   <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
                 </div>
               )}
+              {/* Remove direct onJoinRequest since they must go to details to request */}
               <TeamCard 
                 team={team} 
                 currentUserId={currentUser?.uid} 
-                onJoinRequest={handleJoinTeam} 
               />
             </div>
           ))}

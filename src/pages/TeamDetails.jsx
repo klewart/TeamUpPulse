@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, writeBatch, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, writeBatch, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { Loader2, Users, ArrowLeft, UserPlus, CheckCircle2, MessageSquare, ListTodo, Star, UserMinus, LogOut, Trash2, Hourglass, X, Check } from 'lucide-react';
 import SkillTag from '../components/SkillTag';
 import { calculateSkillMatch } from '../utils/matchUtils';
@@ -22,51 +22,53 @@ const TeamDetails = () => {
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-    fetchTeamData();
-  }, [id]);
+    if (!id) return;
+    
+    setLoading(true);
+    const teamRef = doc(db, 'teams', id);
+    
+    const unsubscribe = onSnapshot(teamRef, async (teamSnap) => {
+      try {
+        if (!teamSnap.exists()) {
+          setError("Team not found");
+          setLoading(false);
+          return;
+        }
+        
+        const teamData = { id: teamSnap.id, ...teamSnap.data() };
+        setTeam(teamData);
 
-  const fetchTeamData = async () => {
-    try {
-      setLoading(true);
-      
-      // 1. Fetch Team Details
-      const teamRef = doc(db, 'teams', id);
-      const teamSnap = await getDoc(teamRef);
-      
-      if (!teamSnap.exists()) {
-        setError("Team not found");
+        // Fetch member profiles
+        if (teamData.members && teamData.members.length > 0) {
+          await fetchMemberProfiles(teamData.members);
+        } else {
+          setMemberData([]);
+        }
+
+        // Fetch join request profiles
+        if (teamData.joinRequests && teamData.joinRequests.length > 0) {
+          await fetchRequestProfiles(teamData.joinRequests);
+        } else {
+          setRequestData([]);
+        }
+
+        // 2. If the current user is the creator, fetch suggested teammates
+        if (teamData.createdBy === currentUser?.uid) {
+          await fetchSuggestedTeammates(teamData);
+        }
+        
         setLoading(false);
-        return;
+        setError('');
+      } catch (err) {
+        console.error("Error processing team data:", err);
       }
-      
-      const teamData = { id: teamSnap.id, ...teamSnap.data() };
-      setTeam(teamData);
-
-      // Fetch member profiles
-      if (teamData.members && teamData.members.length > 0) {
-        await fetchMemberProfiles(teamData.members);
-      } else {
-        setMemberData([]);
-      }
-
-      // Fetch join request profiles
-      if (teamData.joinRequests && teamData.joinRequests.length > 0) {
-        await fetchRequestProfiles(teamData.joinRequests);
-      } else {
-        setRequestData([]);
-      }
-
-      // 2. If the current user is the creator, fetch suggested teammates
-      if (teamData.createdBy === currentUser?.uid) {
-        await fetchSuggestedTeammates(teamData);
-      }
-      
-    } catch (err) {
+    }, (err) => {
       setError('Failed to load team details: ' + err.message);
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [id, currentUser]);
 
   const fetchMemberProfiles = async (memberIds) => {
     try {
@@ -279,14 +281,13 @@ const TeamDetails = () => {
       const teamRef = doc(db, 'teams', team.id);
       
       await updateDoc(teamRef, {
-        members: arrayRemove(currentUser.uid)
+        members: arrayRemove(currentUser.uid),
+        joinRequests: arrayRemove(currentUser.uid)
       });
       
-      setTeam(prev => ({
-        ...prev,
-        members: prev.members.filter(id => id !== currentUser.uid)
-      }));
-      setMemberData(prev => prev.filter(member => member.uid !== currentUser.uid));
+      // Because we are using onSnapshot, we don't necessarily need to update 
+      // the local state manually, but it's okay if we just let the listener handle it.
+      
     } catch (err) {
       alert('Failed to leave team: ' + err.message);
     } finally {

@@ -3,7 +3,7 @@ import { Users, ChevronRight, MessageSquare, ListTodo, Star } from 'lucide-react
 import SkillTag from './SkillTag';
 import { useNavigate } from 'react-router-dom';
 
-const TeamCard = ({ team, currentUserId, onJoinRequest }) => {
+const TeamCard = ({ team, currentUserId }) => {
   const navigate = useNavigate();
   const { 
     id, 
@@ -55,23 +55,23 @@ const TeamCard = ({ team, currentUserId, onJoinRequest }) => {
           <span>{members?.length || 0} / {maxMembers} Members</span>
         </div>
 
-        {!isMember && !isFull && onJoinRequest && (
+        {!isMember && (
           <button 
-            onClick={() => onJoinRequest(id)}
-            className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+            onClick={() => navigate(`/team/${id}`)}
+            className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors ml-auto"
           >
-            Join Team
+            View Details
             <ChevronRight className="w-4 h-4" />
           </button>
         )}
         
         {(isCreator || isMember) && (
-           <div className="flex gap-2 mt-2 flex-wrap">
+           <div className="flex gap-2 mt-2 flex-wrap justify-end flex-1">
              <button 
                onClick={() => navigate(`/team/${id}`)}
                className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
              >
-               View Details
+               Details
              </button>
              <button 
                onClick={() => navigate(`/team/${id}/tasks`)}
