@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { doc, getDoc, collection, query, orderBy, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Star, AlertTriangle, Users, Award, ShieldCheck, PenTool, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Star, AlertTriangle, Users, Award, ShieldCheck, PenTool, CheckCircle2, Quote } from 'lucide-react';
 
 import StarRating from '../components/StarRating';
 import FeedbackCard from '../components/FeedbackCard';

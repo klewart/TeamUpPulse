@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Users, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import NotificationDropdown from './NotificationDropdown';
 
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
@@ -37,6 +38,10 @@ const Navbar = () => {
                 <Link to="/dashboard" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
                   Dashboard
                 </Link>
+                
+                {/* Notification Bell */}
+                <NotificationDropdown />
+
                 <button
                   onClick={() => { logout(); navigate('/'); }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors shadow-sm flex items-center gap-2"
