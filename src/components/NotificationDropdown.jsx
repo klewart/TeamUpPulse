@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Bell, Check, UserPlus, MessageSquare, Info, X } from 'lucide-react';
+import { Bell, Check, UserPlus, MessageSquare, Info, ListTodo, CheckCircle2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const NotificationDropdown = () => {
@@ -94,6 +94,8 @@ const NotificationDropdown = () => {
       case 'request_accepted': return <Check className="w-5 h-5 text-emerald-500" />;
       case 'request_declined': return <X className="w-5 h-5 text-rose-500" />;
       case 'new_message': return <MessageSquare className="w-5 h-5 text-indigo-500" />;
+      case 'task_assigned': return <ListTodo className="w-5 h-5 text-yellow-500" />;
+      case 'task_updated': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
       default: return <Info className="w-5 h-5 text-slate-500" />;
     }
   };

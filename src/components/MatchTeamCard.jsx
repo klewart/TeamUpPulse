@@ -5,7 +5,7 @@ import { db } from '../services/firebase';
 import { doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
-const MatchTeamCard = ({ team, matchResult }) => {
+const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, category }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [joining, setJoining] = useState(false);
@@ -85,6 +85,12 @@ const MatchTeamCard = ({ team, matchResult }) => {
         <div>
           <h3 className="text-xl font-bold text-slate-900 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => navigate(`/team/${id}`)}>{teamName}</h3>
           <p className="text-sm font-medium text-slate-500 mt-1">{projectTopic}</p>
+          {category && (
+            <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+              <span className="h-1.5 w-1.5 rounded-full" aria-hidden="true" style={{ backgroundColor: category === 'backend' ? '#4f46e5' : category === 'frontend' ? '#ec4899' : '#10b981' }} />
+              {category === 'backend' ? 'Backend' : category === 'frontend' ? 'Frontend' : 'Fullstack'}
+            </span>
+          )}
         </div>
         
         <div className="flex flex-col items-end">

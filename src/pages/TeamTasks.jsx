@@ -25,30 +25,33 @@ const TeamTasks = () => {
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Initial Access Check & Load Members
+  // 1. Real-time Access Check & Member Loading
   useEffect(() => {
-    const verifyAccessAndLoadMembers = async () => {
+    if (!currentUser || !id) return;
+
+    setLoading(true);
+    const teamRef = doc(db, 'teams', id);
+    
+    const unsubscribe = onSnapshot(teamRef, async (teamSnap) => {
+      if (!teamSnap.exists()) {
+        setError("This team does not exist.");
+        setLoading(false);
+        return;
+      }
+
+      const teamData = { id: teamSnap.id, ...teamSnap.data() };
+      
+      // Security Check: Ensure user is a member
+      if (!teamData.members?.includes(currentUser.uid)) {
+        setError("Access Denied: You must be a member of this team to view the task board.");
+        setLoading(false);
+        return;
+      }
+
+      setTeam(teamData);
+
+      // Load member profiles to populate the assignee dropdown
       try {
-        const teamRef = doc(db, 'teams', id);
-        const teamSnap = await getDoc(teamRef);
-
-        if (!teamSnap.exists()) {
-          setError("This team does not exist.");
-          setLoading(false);
-          return;
-        }
-
-        const teamData = { id: teamSnap.id, ...teamSnap.data() };
-        setTeam(teamData);
-
-        // Security Check: Ensure user is a member
-        if (!teamData.members?.includes(currentUser.uid)) {
-          setError("Access Denied: You must be a member of this team to view the task board.");
-          setLoading(false);
-          return;
-        }
-
-        // Load member profiles to populate the assignee dropdown
         const memberProfiles = [];
         for (const memberId of teamData.members) {
           const mSnap = await getDoc(doc(db, 'users', memberId));
@@ -57,19 +60,21 @@ const TeamTasks = () => {
           }
         }
         setTeamMembers(memberProfiles);
-        if (memberProfiles.length > 0) {
-           setNewTaskAssignee(memberProfiles[0].id); // Default to first user
+        if (memberProfiles.length > 0 && !newTaskAssignee) {
+           setNewTaskAssignee(memberProfiles[0].id); // Default if not set
         }
-
       } catch (err) {
-        setError('Failed to load workspace: ' + err.message);
-        setLoading(false);
+        console.error("Error loading member profiles:", err);
       }
-    };
+      
+      setLoading(false);
+    }, (err) => {
+        console.error("Team subscription error:", err);
+        setError('Failed to load workspace updates: ' + err.message);
+        setLoading(false);
+    });
 
-    if (currentUser && id) {
-      verifyAccessAndLoadMembers();
-    }
+    return () => unsubscribe();
   }, [id, currentUser]);
 
   // 2. Real-time Firestore Listener for Tasks
@@ -114,6 +119,17 @@ const TeamTasks = () => {
         createdBy: currentUser.uid,
         createdAt: serverTimestamp(),
       });
+
+      // Notify the assignee about their new task
+      await addDoc(collection(db, 'notifications'), {
+        userId: newTaskAssignee,
+        type: 'task_assigned',
+        title: 'New Task Assigned',
+        message: `You were assigned "${newTaskTitle.trim()}" in ${team.teamName}.`,
+        link: `/team/${id}/tasks`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
       
       // Reset form
       setNewTaskTitle('');
@@ -137,6 +153,21 @@ const TeamTasks = () => {
        }
        
        await updateDoc(taskRef, updateData);
+
+       // Notify the assignee about the status change
+       const updatedTaskSnapshot = await getDoc(taskRef);
+       const updatedTask = updatedTaskSnapshot.exists() ? updatedTaskSnapshot.data() : null;
+       if (updatedTask && updatedTask.assignedTo) {
+         await addDoc(collection(db, 'notifications'), {
+           userId: updatedTask.assignedTo,
+           type: 'task_updated',
+           title: 'Task Status Updated',
+           message: `${currentUser.displayName || 'Someone'} marked "${updatedTask.title}" as ${newStatus.replace('-', ' ')}.`,
+           link: `/team/${id}/tasks`,
+           isRead: false,
+           createdAt: serverTimestamp(),
+         });
+       }
      } catch (err) {
        console.error("Error updating status", err);
        alert("Failed to update status.");

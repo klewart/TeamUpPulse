@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Loader2, Award, Briefcase, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 
 import Sidebar from '../components/Sidebar';
 import ProfileSummary from '../components/ProfileSummary';
@@ -24,84 +24,85 @@ const Dashboard = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!currentUser) return;
-      
-      try {
-        setLoading(true);
+    if (!currentUser) return;
+
+    setLoading(true);
+    
+    // 1. Real-time Profile Listener
+    const userRef = doc(db, 'users', currentUser.uid);
+    const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setProfileData(data);
         
-        // 1. Fetch User Profile
-        const userRef = doc(db, 'users', currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        let userSkills = [];
-        
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setProfileData(data);
-          userSkills = data.skills || [];
+        // Trigger recommendations update if skills exist
+        if (data.skills?.length > 0) {
+          fetchRecommendations(data.skills);
         }
-
-        // 2 & 3. Fetch Teams Created and Teams Joined
-        const teamsRef = collection(db, 'teams');
-        
-        // Fetch teams where user is creator
-        const createdQ = query(teamsRef, where('createdBy', '==', currentUser.uid));
-        const createdSnap = await getDocs(createdQ);
-        const createdData = [];
-        createdSnap.forEach(doc => createdData.push({ id: doc.id, ...doc.data() }));
-
-        // Fetch teams where user is a member
-        const joinedQ = query(teamsRef, where('members', 'array-contains', currentUser.uid));
-        const joinedSnap = await getDocs(joinedQ);
-        const joinedData = [];
-        
-        joinedSnap.forEach(doc => {
-          const tData = { id: doc.id, ...doc.data() };
-          // Filter out teams that the user created so they only appear in the "Created" section
-          if (tData.createdBy !== currentUser.uid) {
-            joinedData.push(tData);
-          }
-        });
-
-        // 4. Calculate Top 3 Recommended Teams
-        if (userSkills.length > 0) {
-          const allTeamsSnap = await getDocs(teamsRef);
-          const recommendations = [];
-
-          allTeamsSnap.forEach(doc => {
-            const tData = doc.data();
-            const isMember = tData.members?.includes(currentUser.uid);
-            const isFull = tData.members?.length >= tData.maxMembers;
-            
-            if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
-              const matchResult = calculateSkillMatch(userSkills, tData.requiredSkills || []);
-              if (matchResult.score > 0) {
-                recommendations.push({
-                  id: doc.id,
-                  ...tData,
-                  matchResult
-                });
-              }
-            }
-          });
-
-          // Sort by highest match and take top 3
-          recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
-          setRecommendedTeams(recommendations.slice(0, 3));
-        }
-
-        setCreatedTeams(createdData);
-        setJoinedTeams(joinedData);
-
-      } catch (err) {
-        setError('Failed to load dashboard data: ' + err.message);
-      } finally {
-        setLoading(false);
       }
-    };
+    });
 
-    fetchDashboardData();
+    // 2. Real-time Created Teams Listener
+    const teamsRef = collection(db, 'teams');
+    const createdQ = query(teamsRef, where('createdBy', '==', currentUser.uid));
+    const unsubscribeCreated = onSnapshot(createdQ, (snapshot) => {
+      const teams = [];
+      snapshot.forEach(doc => teams.push({ id: doc.id, ...doc.data() }));
+      setCreatedTeams(teams);
+      setLoading(false);
+    });
+
+    // 3. Real-time Joined Teams Listener
+    const joinedQ = query(teamsRef, where('members', 'array-contains', currentUser.uid));
+    const unsubscribeJoined = onSnapshot(joinedQ, (snapshot) => {
+      const teams = [];
+      snapshot.forEach(doc => {
+        const data = { id: doc.id, ...doc.data() };
+        if (data.createdBy !== currentUser.uid) {
+          teams.push(data);
+        }
+      });
+      setJoinedTeams(teams);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeProfile();
+      unsubscribeCreated();
+      unsubscribeJoined();
+    };
   }, [currentUser]);
+
+  // Recommendations still use a one-time fetch but are triggered by profile updates
+  const fetchRecommendations = async (userSkills) => {
+    try {
+      const teamsRef = collection(db, 'teams');
+      const allTeamsSnap = await getDocs(teamsRef);
+      const recommendations = [];
+
+      allTeamsSnap.forEach(doc => {
+        const tData = doc.data();
+        const isMember = tData.members?.includes(currentUser.uid);
+        const isFull = tData.members?.length >= tData.maxMembers;
+        
+        if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
+          const matchResult = calculateSkillMatch(userSkills, tData.requiredSkills || []);
+          if (matchResult.score > 0) {
+            recommendations.push({
+              id: doc.id,
+              ...tData,
+              matchResult
+            });
+          }
+        }
+      });
+
+      recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
+      setRecommendedTeams(recommendations.slice(0, 3));
+    } catch (err) {
+      console.error("Failed to fetch recommendations:", err);
+    }
+  };
 
   if (loading) {
     return (

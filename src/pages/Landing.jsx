@@ -1,8 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Code, Users, Zap } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Landing = () => {
+  const { currentUser } = useAuth();
+  
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -14,7 +17,7 @@ const Landing = () => {
           TeamUpPulse connects driven students with complementary skills to build amazing educational projects together.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/login" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-medium text-lg transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2">
+          <Link to={currentUser ? "/dashboard" : "/login"} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-medium text-lg transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2">
             Get Started <ArrowRight className="w-5 h-5" />
           </Link>
           <a href="#features" className="bg-white hover:bg-gray-50 text-slate-700 border border-gray-200 px-8 py-4 rounded-xl font-medium text-lg transition-colors flex items-center justify-center">

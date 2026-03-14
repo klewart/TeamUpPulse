@@ -5,82 +5,95 @@ import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebas
 import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import MatchTeamCard from '../components/MatchTeamCard';
 import Sidebar from '../components/Sidebar';
-import { calculateSkillMatch } from '../utils/matchUtils';
+import { calculateSkillMatch, categorizeSkillset } from '../utils/matchUtils';
 import { Link } from 'react-router-dom';
 
 const RecommendedTeams = () => {
   const { currentUser } = useAuth();
   const [recommendedTeams, setRecommendedTeams] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
+  const [userCategory, setUserCategory] = useState('fullstack');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchRecommendations();
-  }, [currentUser]);
-
-  const fetchRecommendations = async () => {
     if (!currentUser) return;
 
-    try {
-      setLoading(true);
-      
-      // 1. Fetch current user's skills
-      const userRef = doc(db, 'users', currentUser.uid);
-      const userSnap = await getDoc(userRef);
-      
-      let userSkills = [];
+    const userRef = doc(db, 'users', currentUser.uid);
+    const unsubscribe = onSnapshot(userRef, (userSnap) => {
       if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setUserProfile(userData);
-        userSkills = userData.skills || [];
+        setUserProfile(userSnap.data());
       } else {
-        throw new Error("User profile not found. Please setup your profile first.");
-      }
-
-      if (userSkills.length === 0) {
-        setRecommendedTeams([]);
+        setError("User profile not found. Please setup your profile first.");
         setLoading(false);
-        return;
       }
+    }, (err) => {
+      console.error("User profile subscription error:", err);
+      setError("Failed to load user profile.");
+      setLoading(false);
+    });
 
-      // 2. Fetch all teams
-      const teamsRef = collection(db, 'teams');
-      const teamsSnap = await getDocs(teamsRef);
-      
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || !userProfile) return;
+
+    const userSkills = userProfile.skills || [];
+    if (userSkills.length === 0) {
+      setRecommendedTeams([]);
+      setUserCategory('fullstack');
+      setLoading(false);
+      return;
+    }
+
+    const category = categorizeSkillset(userSkills);
+    setUserCategory(category);
+
+    setLoading(true);
+    const teamsRef = collection(db, 'teams');
+    const unsubscribe = onSnapshot(teamsRef, (snapshot) => {
       const processedTeams = [];
-
-      teamsSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         const teamData = doc.data();
         
-        // Skip teams the user created or already joined
         const isMember = teamData.members?.includes(currentUser.uid);
         const isCreator = teamData.createdBy === currentUser.uid;
         const isFull = teamData.members?.length >= teamData.maxMembers;
         
         if (!isMember && !isCreator && !isFull) {
-          // Calculate match
+          const teamCategory = categorizeSkillset(teamData.requiredSkills || []);
           const matchResult = calculateSkillMatch(userSkills, teamData.requiredSkills || []);
           
-          processedTeams.push({
-            id: doc.id,
-            ...teamData,
-            matchResult
-          });
+          if (matchResult.score > 0) {
+            processedTeams.push({
+              id: doc.id,
+              ...teamData,
+              matchResult,
+              category: teamCategory
+            });
+          }
         }
       });
 
-      // 3. Sort by match score descending
-      processedTeams.sort((a, b) => b.matchResult.score - a.matchResult.score);
+      processedTeams.sort((a, b) => {
+        const aMatch = a.category === category ? 0 : 1;
+        const bMatch = b.category === category ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return b.matchResult.score - a.matchResult.score;
+      });
       
       setRecommendedTeams(processedTeams);
-    } catch (err) {
-      setError('Failed to calculate recommendations: ' + err.message);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Teams subscription error:", err);
+      setError("Lost connection to teams database.");
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, userProfile]);
 
   // handleJoinTeam logic removed to enforce the Request to Join flow.
 
@@ -92,16 +105,23 @@ const RecommendedTeams = () => {
         <div className="lg:col-span-3 lg:sticky lg:top-24 h-fit hidden lg:block">
           <Sidebar />
         </div>
-
         {/* Right Column: Main Content */}
         <div className="lg:col-span-9 space-y-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Smart Matches</h1>
-              <p className="text-slate-600 mt-1">Teams looking for your exact skillset.</p>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Smart Matches</h1>
+                <p className="text-slate-600 mt-1">Teams looking for your exact skillset.</p>
+                <div className="mt-2 flex items-center gap-2">
+                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Your Track:</span>
+                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+                    {userCategory === 'backend' ? 'Backend Focused' : userCategory === 'frontend' ? 'Frontend Focused' : 'Fullstack'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -133,12 +153,13 @@ const RecommendedTeams = () => {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
               {recommendedTeams.map(team => (
                 <div key={team.id} className="relative">
                   <MatchTeamCard 
                     team={team} 
                     matchResult={team.matchResult}
+                    category={team.category}
                   />
                 </div>
               ))}

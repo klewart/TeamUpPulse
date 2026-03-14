@@ -17,38 +17,37 @@ const TeamChat = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // 1. Initial Access Check
+  // 1. Real-time Access Check & Team Loading
   useEffect(() => {
-    const verifyAccess = async () => {
-      try {
-        const teamRef = doc(db, 'teams', id);
-        const teamSnap = await getDoc(teamRef);
+    if (!currentUser || !id) return;
 
-        if (!teamSnap.exists()) {
-          setError("This team does not exist.");
-          setLoading(false);
-          return;
-        }
-
-        const teamData = { id: teamSnap.id, ...teamSnap.data() };
-        setTeam(teamData);
-
-        // Security Check: Ensure user is a member
-        if (!teamData.members?.includes(currentUser.uid)) {
-          setError("Access Denied: You must be a member of this team to view the chat.");
-          setLoading(false);
-          return;
-        }
-
-      } catch (err) {
-        setError('Failed to load workspace: ' + err.message);
+    setLoading(true);
+    const teamRef = doc(db, 'teams', id);
+    const unsubscribe = onSnapshot(teamRef, (teamSnap) => {
+      if (!teamSnap.exists()) {
+        setError("This team does not exist.");
         setLoading(false);
+        return;
       }
-    };
 
-    if (currentUser && id) {
-      verifyAccess();
-    }
+      const teamData = { id: teamSnap.id, ...teamSnap.data() };
+      
+      // Security Check: Ensure user is a member
+      if (!teamData.members?.includes(currentUser.uid)) {
+        setError("Access Denied: You must be a member of this team to view the chat.");
+        setLoading(false);
+        return;
+      }
+
+      setTeam(teamData);
+      setLoading(false);
+    }, (err) => {
+      console.error("Team data subscription error:", err);
+      setError('Failed to load workspace updates: ' + err.message);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [id, currentUser]);
 
   // 2. Real-time Firestore Listener for Messages
@@ -92,6 +91,23 @@ const TeamChat = () => {
         senderName: currentUser.displayName || 'Anonymous Member',
         createdAt: serverTimestamp()
       });
+
+      // Create notifications for other team members
+      const notificationPromises = (team.members || [])
+        .filter((memberId) => memberId !== currentUser.uid)
+        .map((memberId) =>
+          addDoc(collection(db, 'notifications'), {
+            userId: memberId,
+            type: 'new_message',
+            title: `New message from ${currentUser.displayName || 'a teammate'}`,
+            message: `${currentUser.displayName || 'Someone'} sent a message in ${team.teamName}.`,
+            link: `/team/${team.id}/chat`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          })
+        );
+
+      await Promise.all(notificationPromises);
     } catch (err) {
       console.error("Failed to send message:", err);
       throw err; // Re-throw to be handled by ChatInput
