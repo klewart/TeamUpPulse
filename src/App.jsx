@@ -17,6 +17,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import NotificationToastListener from './components/NotificationToastListener';
+import AIMentorChatbot from './components/AIMentorChatbot';
 
 const AuthContent = () => {
   const { currentUser } = useAuth();
@@ -24,6 +25,7 @@ const AuthContent = () => {
     <>
       <Toaster />
       {currentUser && <NotificationToastListener />}
+      <AIMentorChatbot />
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Landing />} />

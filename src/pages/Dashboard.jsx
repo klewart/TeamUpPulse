@@ -14,12 +14,12 @@ import { calculateSkillMatch } from '../utils/matchUtils';
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  
+
   const [createdTeams, setCreatedTeams] = useState([]);
   const [joinedTeams, setJoinedTeams] = useState([]);
   const [recommendedTeams, setRecommendedTeams] = useState([]);
   const [teamInvites, setTeamInvites] = useState([]);
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [dataLoaded, setDataLoaded] = useState({ created: false, joined: false });
@@ -29,7 +29,7 @@ const Dashboard = () => {
     if (!currentUser?.uid) return;
 
     const teamsRef = collection(db, 'teams');
-    
+
     // Fail-safe: Force loading to false after 3 seconds if snapshots hang
     const timer = setTimeout(() => {
       setLoading(false);
@@ -104,7 +104,7 @@ const Dashboard = () => {
           const tData = doc.data();
           const isMember = tData.members?.includes(currentUser.uid);
           const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
-          
+
           if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
             const matchResult = calculateSkillMatch(currentUser.skills, tData.requiredSkills || []);
             if (matchResult.score > 0) {
@@ -137,13 +137,13 @@ const Dashboard = () => {
       await updateDoc(teamRef, {
         members: arrayUnion(currentUser.uid)
       });
-      
+
       // Update invite status
       const inviteRef = doc(db, 'teamInvites', invite.id);
       await updateDoc(inviteRef, {
         status: 'accepted'
       });
-      
+
       setLoading(false);
     } catch (err) {
       alert('Failed to accept invite: ' + err.message);
@@ -173,7 +173,7 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      
+
       {/* Dynamic Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
@@ -182,7 +182,7 @@ const Dashboard = () => {
           </h1>
           <p className="text-slate-600 mt-1">Here is what's happening in your teams today.</p>
         </div>
-        <button 
+        <button
           onClick={() => navigate('/create-team')}
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm shadow-blue-200 text-sm flex items-center gap-2"
         >
@@ -199,7 +199,7 @@ const Dashboard = () => {
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Left Column: Sidebar & Profile */}
         <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-24 h-fit">
           <Sidebar />
@@ -208,7 +208,7 @@ const Dashboard = () => {
 
         {/* Right Column: Main Content Feed */}
         <div className="lg:col-span-9 space-y-10">
-          
+
           {/* Section: Pending Invites */}
           {teamInvites.length > 0 && (
             <section>
@@ -218,7 +218,7 @@ const Dashboard = () => {
                   Team Invitations ({teamInvites.length})
                 </h2>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {teamInvites.map(invite => (
                   <div key={invite.id} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm shadow-blue-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -254,14 +254,14 @@ const Dashboard = () => {
                 Teams You Lead ({createdTeams.length})
               </h2>
             </div>
-            
+
             {createdTeams.length === 0 ? (
               <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
                 <p className="text-slate-500 mb-4">You haven't created any teams yet.</p>
                 <div className="flex gap-4">
-                    <button onClick={() => navigate('/create-team')} className="text-indigo-600 font-semibold hover:underline">
-                      Start a project
-                    </button>
+                  <button onClick={() => navigate('/create-team')} className="text-indigo-600 font-semibold hover:underline">
+                    Start a project
+                  </button>
                 </div>
               </div>
             ) : (
@@ -275,20 +275,20 @@ const Dashboard = () => {
 
           {/* Section: Teams Joined */}
           <section>
-             <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-5">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-5">
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Briefcase className="w-5 h-5 text-emerald-500" />
                 Collaborating On ({joinedTeams.length})
               </h2>
             </div>
-            
+
             {joinedTeams.length === 0 ? (
-               <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+              <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
                 <p className="text-slate-500 mb-4">You haven't joined any other teams.</p>
                 <div className="flex gap-4">
-                    <Link to="/teams" className="text-emerald-600 font-semibold hover:underline">
-                      Discover open projects
-                    </Link>
+                  <Link to="/teams" className="text-emerald-600 font-semibold hover:underline">
+                    Discover open projects
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -319,9 +319,9 @@ const Dashboard = () => {
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 text-center border border-white flex flex-col items-center justify-center">
                 <p className="text-slate-600 mb-2">Configure your profile skills to get smart recommendations!</p>
                 <div className="flex gap-4 mt-2">
-                    <Link to="/profile" className="inline-block px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition-colors">
-                      Update Skills
-                    </Link>
+                  <Link to="/profile" className="inline-block px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition-colors">
+                    Update Skills
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -331,7 +331,7 @@ const Dashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <div className="mt-6 text-center sm:hidden">
               <Link to="/recommendations" className="text-indigo-600 font-semibold hover:underline">
                 View all matches

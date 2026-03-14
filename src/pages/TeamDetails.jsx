@@ -11,7 +11,7 @@ const TeamDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  
+
   const [team, setTeam] = useState(null);
   const [memberData, setMemberData] = useState([]);
   const [requestData, setRequestData] = useState([]);
@@ -25,10 +25,10 @@ const TeamDetails = () => {
 
   useEffect(() => {
     if (!id) return;
-    
+
     setLoading(true);
     const teamRef = doc(db, 'teams', id);
-    
+
     const unsubscribe = onSnapshot(teamRef, async (teamSnap) => {
       try {
         if (!teamSnap.exists()) {
@@ -36,7 +36,7 @@ const TeamDetails = () => {
           setLoading(false);
           return;
         }
-        
+
         const teamData = { id: teamSnap.id, ...teamSnap.data() };
         setTeam(teamData);
 
@@ -58,7 +58,7 @@ const TeamDetails = () => {
         if (teamData.createdBy === currentUser?.uid) {
           await fetchSuggestedTeammates(teamData);
         }
-        
+
         setLoading(false);
         setError('');
       } catch (err) {
@@ -76,14 +76,14 @@ const TeamDetails = () => {
     // Fetch pending invites to disable "Request to Invite" for already invited users
     const isTeamCreator = team?.createdBy === currentUser?.uid;
     if (!id || !isTeamCreator) return;
-    
+
     const invitesRef = collection(db, 'teamInvites');
     const q = query(invitesRef, where('projectId', '==', id), where('status', '==', 'pending'));
-    
+
     const unsubscribeInvites = onSnapshot(q, (snapshot) => {
-       const invitedIds = new Set();
-       snapshot.forEach(doc => invitedIds.add(doc.data().receiverId));
-       setInvitedUsers(invitedIds);
+      const invitedIds = new Set();
+      snapshot.forEach(doc => invitedIds.add(doc.data().receiverId));
+      setInvitedUsers(invitedIds);
     });
 
     return () => unsubscribeInvites();
@@ -127,24 +127,24 @@ const TeamDetails = () => {
     try {
       const usersRef = collection(db, 'users');
       const usersSnap = await getDocs(usersRef);
-      
+
       const suggestions = [];
       const teamMembers = teamData.members || [];
       const requiredSkills = teamData.requiredSkills || [];
 
       usersSnap.forEach((doc) => {
         const userData = doc.data();
-        
+
         // Skip users that are already members
         if (teamMembers.includes(userData.uid)) return;
-        
+
         // Skip users with no skills set yet
         const userSkills = userData.skills || [];
         if (userSkills.length === 0) return;
 
         // Calculate Match Score
         const matchResult = calculateSkillMatch(userSkills, requiredSkills);
-        
+
         // Only suggest if score is > 0
         if (matchResult.score > 0) {
           suggestions.push({
@@ -153,11 +153,11 @@ const TeamDetails = () => {
           });
         }
       });
-      
+
       // Sort suggestions highest match first
       suggestions.sort((a, b) => b.matchResult.score - a.matchResult.score);
       setSuggestedTeammates(suggestions);
-      
+
     } catch (err) {
       console.error("Failed to load suggestions:", err);
     }
@@ -165,7 +165,7 @@ const TeamDetails = () => {
 
   const handleSendInvite = async (userId, userName) => {
     if (!currentUser || !team) return;
-    
+
     try {
       setActionLoading(true);
       await addDoc(collection(db, 'teamInvites'), {
@@ -176,7 +176,7 @@ const TeamDetails = () => {
         status: 'pending',
         timestamp: serverTimestamp()
       });
-      
+
       // Also notify the user
       await addDoc(collection(db, 'notifications'), {
         userId: userId,
@@ -187,7 +187,7 @@ const TeamDetails = () => {
         isRead: false,
         createdAt: serverTimestamp()
       });
-      
+
       alert(`Invitation sent to ${userName}!`);
     } catch (err) {
       alert('Failed to send invite: ' + err.message);
@@ -198,20 +198,20 @@ const TeamDetails = () => {
 
   const handleRequestJoin = async () => {
     if (!currentUser || !team) return;
-    
+
     try {
       setJoining(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await updateDoc(teamRef, {
         joinRequests: arrayUnion(currentUser.uid)
       });
-      
+
       setTeam(prev => ({
         ...prev,
         joinRequests: [...(prev.joinRequests || []), currentUser.uid]
       }));
-      
+
       // Send Notification to Team Creator
       await addDoc(collection(db, 'notifications'), {
         userId: team.createdBy,
@@ -224,7 +224,7 @@ const TeamDetails = () => {
       });
 
       alert('Request sent successfully!');
-      
+
     } catch (err) {
       alert('Failed to send request: ' + err.message);
     } finally {
@@ -236,14 +236,14 @@ const TeamDetails = () => {
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await updateDoc(teamRef, {
         joinRequests: arrayRemove(userId),
         members: arrayUnion(userId)
       });
-      
+
       const acceptedUser = requestData.find(user => user.uid === userId);
-      
+
       setTeam(prev => ({
         ...prev,
         joinRequests: prev.joinRequests.filter(id => id !== userId),
@@ -251,7 +251,7 @@ const TeamDetails = () => {
       }));
       setRequestData(prev => prev.filter(req => req.uid !== userId));
       setMemberData(prev => [...prev, acceptedUser]);
-      
+
       // Notify the accepted user
       await addDoc(collection(db, 'notifications'), {
         userId: userId,
@@ -265,7 +265,7 @@ const TeamDetails = () => {
 
       // Notify all other existing members
       const otherMembers = team.members.filter(m => m !== userId && m !== currentUser.uid);
-      const notificationPromises = otherMembers.map(memberId => 
+      const notificationPromises = otherMembers.map(memberId =>
         addDoc(collection(db, 'notifications'), {
           userId: memberId,
           type: 'info',
@@ -289,17 +289,17 @@ const TeamDetails = () => {
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await updateDoc(teamRef, {
         joinRequests: arrayRemove(userId)
       });
-      
+
       setTeam(prev => ({
         ...prev,
         joinRequests: prev.joinRequests.filter(id => id !== userId)
       }));
       setRequestData(prev => prev.filter(req => req.uid !== userId));
-      
+
       // Notify the declined user
       await addDoc(collection(db, 'notifications'), {
         userId: userId,
@@ -319,15 +319,15 @@ const TeamDetails = () => {
 
   const handleRemoveMember = async (memberId, memberName) => {
     if (!window.confirm(`Are you sure you want to remove ${memberName} from the team?`)) return;
-    
+
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await updateDoc(teamRef, {
         members: arrayRemove(memberId)
       });
-      
+
       setTeam(prev => ({
         ...prev,
         members: prev.members.filter(id => id !== memberId)
@@ -342,19 +342,19 @@ const TeamDetails = () => {
 
   const handleLeaveTeam = async () => {
     if (!window.confirm("Are you sure you want to leave this team?")) return;
-    
+
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await updateDoc(teamRef, {
         members: arrayRemove(currentUser.uid),
         joinRequests: arrayRemove(currentUser.uid)
       });
-      
+
       // Because we are using onSnapshot, we don't necessarily need to update 
       // the local state manually, but it's okay if we just let the listener handle it.
-      
+
     } catch (err) {
       alert('Failed to leave team: ' + err.message);
     } finally {
@@ -364,11 +364,11 @@ const TeamDetails = () => {
 
   const handleDeleteTeam = async () => {
     if (!window.confirm("WARNING: Are you sure you want to permanently delete this team? This action cannot be undone.")) return;
-    
+
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
-      
+
       await deleteDoc(teamRef);
       navigate('/dashboard');
     } catch (err) {
@@ -404,9 +404,9 @@ const TeamDetails = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      
+
       {/* Back Button */}
-      <button 
+      <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors font-medium mb-6"
       >
@@ -414,52 +414,52 @@ const TeamDetails = () => {
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Main Team Details Container */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{team.teamName}</h1>
-                  <p className="text-lg font-medium text-blue-600 mt-2">{team.projectTopic}</p>
-                </div>
-                <div className="flex flex-col gap-2 items-end">
-                  <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl text-slate-700 font-semibold border border-slate-100">
-                    <Users className="w-5 h-5 text-slate-400" />
-                    <span>{team.members?.length || 0} / {team.maxMembers}</span>
-                  </div>
-                  {(isCreator || isMember) && (
-                    <div className="flex flex-wrap gap-2 mt-2 justify-end">
-                       {isCreator && (
-                         <button 
-                           onClick={() => setShowBrowseModal(true)}
-                           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold border border-blue-700 transition-colors shadow-sm text-sm"
-                         >
-                           <Search className="w-4 h-4" /> Browse Members
-                         </button>
-                       )}
-                       <button 
-                         onClick={() => navigate(`/team/${team.id}/tasks`)}
-                         className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-semibold border border-indigo-700 transition-colors shadow-sm text-sm"
-                       >
-                         <ListTodo className="w-4 h-4" /> Task Board
-                       </button>
-                       <button 
-                         onClick={() => navigate(`/team/${team.id}/chat`)}
-                         className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-semibold border border-indigo-200 transition-colors shadow-sm text-sm"
-                       >
-                         <MessageSquare className="w-4 h-4" /> Open Chat
-                       </button>
-                       <button 
-                         onClick={() => navigate(`/team/${team.id}/feedback`)}
-                         className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 px-4 py-2 rounded-xl font-semibold border border-amber-200 transition-colors shadow-sm text-sm"
-                       >
-                         <Star className="w-4 h-4" /> Peer Feedback
-                       </button>
-                    </div>
-                  )}
-                </div>
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{team.teamName}</h1>
+                <p className="text-lg font-medium text-blue-600 mt-2">{team.projectTopic}</p>
               </div>
+              <div className="flex flex-col gap-2 items-end">
+                <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl text-slate-700 font-semibold border border-slate-100">
+                  <Users className="w-5 h-5 text-slate-400" />
+                  <span>{team.members?.length || 0} / {team.maxMembers}</span>
+                </div>
+                {(isCreator || isMember) && (
+                  <div className="flex flex-wrap gap-2 mt-2 justify-end">
+                    {isCreator && (
+                      <button
+                        onClick={() => setShowBrowseModal(true)}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold border border-blue-700 transition-colors shadow-sm text-sm"
+                      >
+                        <Search className="w-4 h-4" /> Browse Members
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate(`/team/${team.id}/tasks`)}
+                      className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-semibold border border-indigo-700 transition-colors shadow-sm text-sm"
+                    >
+                      <ListTodo className="w-4 h-4" /> Task Board
+                    </button>
+                    <button
+                      onClick={() => navigate(`/team/${team.id}/chat`)}
+                      className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-semibold border border-indigo-200 transition-colors shadow-sm text-sm"
+                    >
+                      <MessageSquare className="w-4 h-4" /> Open Chat
+                    </button>
+                    <button
+                      onClick={() => navigate(`/team/${team.id}/feedback`)}
+                      className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 px-4 py-2 rounded-xl font-semibold border border-amber-200 transition-colors shadow-sm text-sm"
+                    >
+                      <Star className="w-4 h-4" /> Peer Feedback
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="prose prose-slate max-w-none mb-8">
               <h3 className="text-lg font-bold text-slate-900">Project Description</h3>
@@ -493,7 +493,7 @@ const TeamDetails = () => {
                           <p className="text-xs text-slate-500 truncate max-w-[150px]">{req.university || 'No university'}</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex bg-slate-50 rounded-lg p-1 border border-slate-100">
                         <button
                           onClick={() => handleAcceptRequest(req.uid)}
@@ -536,7 +536,7 @@ const TeamDetails = () => {
                           <p className="text-xs text-slate-500 truncate max-w-[120px]">{member.university || 'No university'}</p>
                         </div>
                       </div>
-                      
+
                       {isCreator && member.uid !== currentUser.uid && (
                         <button
                           onClick={() => handleRemoveMember(member.uid, member.name)}
@@ -589,7 +589,7 @@ const TeamDetails = () => {
                   This team is full
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={handleRequestJoin}
                   disabled={joining}
                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-70"
@@ -620,18 +620,18 @@ const TeamDetails = () => {
                     <div key={user.uid} className="bg-white p-4 rounded-xl border border-indigo-50 shadow-sm relative overflow-hidden">
                       {/* Match Score Strip */}
                       <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500"></div>
-                      
+
                       <div className="pl-2 flex justify-between items-start mb-2">
                         <h4 className="font-bold text-slate-900 truncate pr-2">{user.name}</h4>
                         <span className="text-sm font-black text-indigo-600 flex-shrink-0">{user.matchResult?.score || 0}%</span>
                       </div>
-                      
+
                       {user.university && (
-                         <p className="pl-2 text-xs text-slate-500 mb-3 truncate">{user.university}</p>
+                        <p className="pl-2 text-xs text-slate-500 mb-3 truncate">{user.university}</p>
                       )}
-                      
+
                       <div className="pl-2 flex flex-wrap gap-1">
-                        {user.matchResult?.matchedSkills?.slice(0,3).map((skill, i) => (
+                        {user.matchResult?.matchedSkills?.slice(0, 3).map((skill, i) => (
                           <span key={i} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/50">
                             {skill}
                           </span>
@@ -659,14 +659,14 @@ const TeamDetails = () => {
                   </h2>
                   <p className="text-sm text-slate-500 mt-1">We found these users based on your project's required skills.</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowBrowseModal(false)}
                   className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="p-6 overflow-y-auto flex-1">
                 {suggestedTeammates.length === 0 ? (
                   <div className="text-center py-10">
@@ -681,17 +681,17 @@ const TeamDetails = () => {
                         <div className="absolute top-0 right-0 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-bl-lg border-b border-l border-blue-100">
                           {user.matchResult?.score || 0}% Match
                         </div>
-                        
+
                         <div className="flex items-center gap-3 mb-3 mt-2">
-                           <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-200">
-                             {user.name ? user.name.charAt(0).toUpperCase() : '?'}
-                           </div>
-                           <div>
-                             <h4 className="font-bold text-slate-900 leading-tight">{user.name}</h4>
-                             <p className="text-xs text-slate-500 mt-0.5">{user.university || 'No university listed'}</p>
-                           </div>
+                          <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-200">
+                            {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 leading-tight">{user.name}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">{user.university || 'No university listed'}</p>
+                          </div>
                         </div>
-                        
+
                         <div className="mb-4 flex-1">
                           <p className="text-xs text-slate-500 mb-1.5 font-medium">Matched Skills:</p>
                           <div className="flex flex-wrap gap-1.5">
@@ -707,14 +707,14 @@ const TeamDetails = () => {
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="mt-auto">
                           {invitedUsers.has(user.uid) ? (
                             <button disabled className="w-full py-2 bg-slate-100 text-slate-500 font-semibold rounded-lg text-sm flex items-center justify-center gap-2 cursor-not-allowed">
                               <Check className="w-4 h-4" /> Request Sent
                             </button>
                           ) : (
-                            <button 
+                            <button
                               onClick={() => handleSendInvite(user.uid, user.name)}
                               disabled={actionLoading}
                               className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-lg text-sm transition-colors border border-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"

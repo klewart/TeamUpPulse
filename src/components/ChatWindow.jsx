@@ -37,22 +37,22 @@ const ChatWindow = ({ messages, currentUserId, loading }) => {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6 custom-scrollbar">
       <div className="max-w-5xl mx-auto flex flex-col space-y-2">
-        
+
         {/* Timestamp divider (Simulated for today) */}
         <div className="text-center my-6">
-           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-3 py-1 rounded-full">
-             Beginning of History
-           </span>
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-3 py-1 rounded-full">
+            Beginning of History
+          </span>
         </div>
 
         {messages.map((msg) => (
-          <MessageBubble 
-            key={msg.id} 
-            message={msg} 
-            isOwnMessage={msg.senderId === currentUserId} 
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            isOwnMessage={msg.senderId === currentUserId}
           />
         ))}
-        
+
         {/* Invisible div to scroll to */}
         <div ref={bottomRef} className="h-4" />
       </div>
