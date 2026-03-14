@@ -23,7 +23,7 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden sticky top-8">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="p-4 space-y-1">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -54,13 +54,6 @@ const Sidebar = () => {
           <PlusCircle className="w-5 h-5" />
           Create Team
         </Link>
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors text-left"
-        >
-          <LogOut className="w-5 h-5" />
-          Logout
-        </button>
       </div>
     </div>
   );

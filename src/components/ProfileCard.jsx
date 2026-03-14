@@ -1,9 +1,19 @@
 import React from 'react';
-import { Github, Linkedin, GraduationCap, Mail } from 'lucide-react';
+import { Github, Linkedin, GraduationCap, Mail, Cpu, User } from 'lucide-react';
 import SkillTag from './SkillTag';
 
 const ProfileCard = ({ profile }) => {
   if (!profile) return null;
+
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -13,16 +23,27 @@ const ProfileCard = ({ profile }) => {
       <div className="px-6 pb-8">
         {/* Avatar Placeholder */}
         <div className="relative flex justify-between items-end -mt-12 mb-6">
-          <div className="w-24 h-24 bg-white rounded-full p-1.5 shadow-md">
-            <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-3xl font-bold text-slate-400">
-              {profile.name?.charAt(0)?.toUpperCase()}
-            </div>
+          <div className="w-24 h-24 bg-white rounded-full p-1.5 shadow-md overflow-hidden flex items-center justify-center">
+            {profile.photoURL ? (
+              <img src={profile.photoURL} alt={profile.name} className="w-full h-full rounded-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-blue-100 rounded-full flex items-center justify-center text-3xl font-bold text-blue-600">
+                {getInitials(profile.name)}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Info */}
         <div>
           <h2 className="text-2xl font-bold text-slate-900">{profile.name}</h2>
+          
+          {profile.track && (
+            <div className="mt-1 flex items-center gap-1.5 text-blue-600 font-bold text-xs uppercase tracking-wider">
+              <Cpu className="w-3.5 h-3.5" />
+              {profile.track}
+            </div>
+          )}
           
           <div className="flex flex-col gap-2 mt-3 text-sm text-slate-600">
             {profile.university && (

@@ -5,14 +5,18 @@ import SkillTag from './SkillTag';
 
 const ProfileSummary = ({ profileData, loading }) => {
   if (loading) {
-    return (
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
-        <div className="h-16 w-16 bg-slate-200 rounded-full mb-4"></div>
-        <div className="h-6 w-3/4 bg-slate-200 rounded mb-2"></div>
-        <div className="h-4 w-1/2 bg-slate-200 rounded"></div>
-      </div>
-    );
+// ... loading state ...
   }
+
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   if (!profileData) return null;
 
@@ -26,8 +30,14 @@ const ProfileSummary = ({ profileData, loading }) => {
         <Edit3 className="w-4 h-4" />
       </Link>
 
-      <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl font-bold mb-4">
-        {profileData.name ? profileData.name.charAt(0).toUpperCase() : <User className="w-10 h-10" />}
+      <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center border-4 border-white shadow-sm overflow-hidden">
+        {profileData.photoURL ? (
+          <img src={profileData.photoURL} alt={profileData.name} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-3xl font-bold">
+            {getInitials(profileData.name)}
+          </span>
+        )}
       </div>
       
       <h2 className="text-xl font-bold text-slate-900">{profileData.name || 'Anonymous User'}</h2>

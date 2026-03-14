@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { Plus, Users, PlusCircle, Loader2 } from 'lucide-react';
+import { Plus, Users, PlusCircle, Loader2, AlertTriangle } from 'lucide-react';
 import SkillTag from '../components/SkillTag';
+import Sidebar from '../components/Sidebar';
+import { validateSkill } from '../utils/skillUtils';
 
 const CreateTeam = () => {
   const { currentUser } = useAuth();
@@ -19,6 +21,7 @@ const CreateTeam = () => {
   
   const [skills, setSkills] = useState([]);
   const [newSkill, setNewSkill] = useState('');
+  const [skillError, setSkillError] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,9 +33,22 @@ const CreateTeam = () => {
 
   const handleAddSkill = (e) => {
     e.preventDefault();
-    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
-      setSkills(prev => [...prev, newSkill.trim()]);
+    const input = newSkill.trim();
+    if (!input) return;
+
+    if (skills.includes(input)) {
+      setSkillError('Skill already added');
+      return;
+    }
+
+    const validation = validateSkill(input);
+    
+    if (validation.valid) {
+      setSkills(prev => [...prev, validation.canonical]);
       setNewSkill('');
+      setSkillError('');
+    } else {
+      setSkillError(validation.message);
     }
   };
 
@@ -77,14 +93,24 @@ const CreateTeam = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-          <PlusCircle className="w-8 h-8 text-blue-600" />
-          Create a New Team
-        </h1>
-        <p className="mt-2 text-slate-600">Start a new project and recruit teammates based on their skills.</p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Left Column: Sidebar */}
+        <div className="lg:col-span-3 lg:sticky lg:top-24 h-fit hidden lg:block">
+          <Sidebar />
+        </div>
+
+        {/* Right Column: Content */}
+        <div className="lg:col-span-9">
+          <div className="max-w-3xl mx-auto xl:mx-0">
+            <div className="mb-8">
+              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                <PlusCircle className="w-8 h-8 text-blue-600" />
+                Create a New Team
+              </h1>
+              <p className="mt-2 text-slate-600">Start a new project and recruit teammates based on their skills.</p>
+            </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -163,11 +189,21 @@ const CreateTeam = () => {
                 {skills.length === 0 && <span className="text-sm text-slate-400 italic">No skills added yet</span>}
               </div>
               
+              {skillError && (
+                <div className="mb-3 flex items-center gap-2 text-red-600 text-xs font-medium bg-red-50 p-2 rounded-lg border border-red-100">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {skillError}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
+                  onChange={(e) => {
+                    setNewSkill(e.target.value);
+                    if (skillError) setSkillError('');
+                  }}
                   onKeyPress={(e) => e.key === 'Enter' && handleAddSkill(e)}
                   className="flex-grow px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all"
                   placeholder="e.g. React, Node.js, UI/UX"
@@ -204,9 +240,12 @@ const CreateTeam = () => {
             </button>
           </div>
         </form>
+          </div>
+        </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default CreateTeam;

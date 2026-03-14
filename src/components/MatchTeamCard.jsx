@@ -1,23 +1,66 @@
-import React from 'react';
-import { Users, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Users, ChevronRight, CheckCircle2, XCircle, Loader2, Hourglass } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { db } from '../services/firebase';
+import { doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 
-const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest }) => {
+const MatchTeamCard = ({ team, matchResult }) => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const [joining, setJoining] = useState(false);
+  
   const { 
     id, 
     teamName, 
     projectTopic, 
     members, 
     maxMembers,
-    createdBy
+    createdBy,
+    joinRequests = []
   } = team;
 
   const { score, matchedSkills, missingSkills } = matchResult;
 
   const isFull = members?.length >= maxMembers;
-  const isMember = members?.includes(currentUserId);
-  const isCreator = createdBy === currentUserId;
+  const isMember = members?.includes(currentUser?.uid);
+  const isCreator = createdBy === currentUser?.uid;
+  const hasRequested = joinRequests?.includes(currentUser?.uid);
+
+  const handleRequestJoin = async (e) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      alert("Please login to join a team");
+      return;
+    }
+    
+    try {
+      setJoining(true);
+      const teamRef = doc(db, 'teams', id);
+      
+      await updateDoc(teamRef, {
+        joinRequests: arrayUnion(currentUser.uid)
+      });
+      
+      // Send Notification to Team Creator
+      await addDoc(collection(db, 'notifications'), {
+        userId: createdBy,
+        type: 'join_request',
+        title: 'New Join Request',
+        message: `${currentUser.displayName || 'A user'} wants to join ${teamName}`,
+        link: `/team/${id}`,
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      alert('Request sent successfully!');
+      
+    } catch (err) {
+      alert('Failed to send request: ' + err.message);
+    } finally {
+      setJoining(false);
+    }
+  };
 
   // Determine progress bar color based on score
   const getProgressColor = (score) => {
@@ -105,17 +148,30 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest }) => {
            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Team</span>
         ) : isMember ? (
            <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg">Joined</span>
+        ) : hasRequested ? (
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100/50">
+            <Hourglass className="w-3.5 h-3.5 animate-pulse" /> Pending
+          </div>
         ) : isFull ? (
            <span className="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">Full</span>
-        ) : onJoinRequest ? (
-          <button 
-            onClick={() => onJoinRequest(id)}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-          >
-            Join Team
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        ) : null}
+        ) : (
+          <div className="flex gap-2">
+            <button 
+              onClick={() => navigate(`/team/${id}`)}
+              className="text-slate-500 hover:text-slate-900 text-sm font-medium transition-colors px-2"
+            >
+              Details
+            </button>
+            <button 
+              onClick={handleRequestJoin}
+              disabled={joining}
+              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-70"
+            >
+              {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join Request'}
+              {!joining && <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

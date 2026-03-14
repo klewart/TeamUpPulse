@@ -8,7 +8,7 @@ import {
   signInWithPopup
 } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -79,12 +79,38 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
+    let unsubscribeProfile = () => {};
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Listen to profile changes in Firestore
+        const profileRef = doc(db, 'users', user.uid);
+        unsubscribeProfile = onSnapshot(profileRef, (doc) => {
+          if (doc.exists()) {
+            const profileData = doc.data();
+            // Source of truth: Firestore profile data overwrites Firebase Auth metadata
+            setCurrentUser({ 
+              ...user, 
+              ...profileData,
+              // Only use site-uploaded photoURL from Firestore
+              photoURL: profileData.photoURL || null
+            });
+          } else {
+            setCurrentUser(user);
+          }
+          setLoading(false);
+        });
+      } else {
+        unsubscribeProfile();
+        setCurrentUser(null);
+        setLoading(false);
+      }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      unsubscribeProfile();
+    };
   }, []);
 
   const value = {

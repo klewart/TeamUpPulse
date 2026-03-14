@@ -142,7 +142,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Column: Sidebar & Profile */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-24 h-fit">
           <Sidebar />
           <ProfileSummary profileData={profileData} />
         </div>
