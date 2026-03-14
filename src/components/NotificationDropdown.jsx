@@ -32,8 +32,7 @@ const NotificationDropdown = () => {
     const notifRef = collection(db, 'notifications');
     const q = query(
       notifRef,
-      where('userId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -69,7 +68,11 @@ const NotificationDropdown = () => {
         }
       }
 
-      setNotifications(fetched);
+      setNotifications(fetched.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis() || 0;
+        const timeB = b.createdAt?.toMillis() || 0;
+        return timeB - timeA;
+      }));
       setUnreadCount(unread);
     }, (error) => {
       console.error("Error fetching notifications. Check Firestore Rules.", error);
@@ -116,13 +119,16 @@ const NotificationDropdown = () => {
 
   const getIconForType = (type) => {
     switch (type) {
-      case 'join_request': return <UserPlus className="w-5 h-5 text-blue-500" />;
+      case 'join_request': 
+      case 'team_invite': return <UserPlus className="w-5 h-5 text-blue-500" />;
       case 'request_accepted': return <Check className="w-5 h-5 text-emerald-500" />;
       case 'request_declined': return <X className="w-5 h-5 text-rose-500" />;
       case 'new_message': return <MessageSquare className="w-5 h-5 text-indigo-500" />;
       case 'task_assigned': return <ListTodo className="w-5 h-5 text-yellow-500" />;
-      case 'task_updated': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-      default: return <Info className="w-5 h-5 text-slate-500" />;
+      case 'task_updated': 
+      case 'team_update': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+      case 'info': return <Info className="w-5 h-5 text-blue-400" />;
+      default: return <Bell className="w-5 h-5 text-slate-400" />;
     }
   };
 

@@ -7,9 +7,17 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   
-  const { login, googleSignIn } = useAuth();
+  const { login, googleSignIn, resetPassword, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Auto-redirect if already logged in
+  React.useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +27,33 @@ const Login = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
-      setError('Failed to sign in: ' + err.message);
+      if (err.code === 'auth/invalid-credential') {
+        setError(
+          <div className="text-left">
+            <p className="font-bold mb-1">Invalid credentials.</p>
+            <p className="text-xs opacity-90">If you signed up with Google, please use the <b>Google button</b> below. If you forgot your password, click "Forgot password?"</p>
+          </div>
+        );
+      } else {
+        setError('Failed to sign in: ' + err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      return setError('Please enter your email first to reset your password.');
+    }
+    try {
+      setError('');
+      setLoading(true);
+      await resetPassword(email);
+      setResetSent(true);
+      setTimeout(() => setResetSent(false), 5000);
+    } catch (err) {
+      setError('Failed to send reset email: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -47,6 +81,7 @@ const Login = () => {
         </div>
         
         {error && <div className="mb-4 bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center font-medium border border-red-100">{error}</div>}
+        {resetSent && <div className="mb-4 bg-emerald-50 text-emerald-600 p-3 rounded-lg text-sm text-center font-medium border border-emerald-100">Password reset email sent! Check your inbox.</div>}
         
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
@@ -64,7 +99,13 @@ const Login = () => {
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="block text-sm font-medium text-slate-700">Password</label>
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-500 font-medium">Forgot password?</a>
+              <button 
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+              >
+                Forgot password?
+              </button>
             </div>
             <input
               type="password"

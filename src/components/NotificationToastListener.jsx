@@ -19,10 +19,9 @@ const NotificationToastListener = () => {
 
     const notifRef = collection(db, 'notifications');
     const q = query(
-      notifRef,
+      collection(db, 'notifications'),
       where('userId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(20) // Get more to sort locally
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -31,14 +30,24 @@ const NotificationToastListener = () => {
         return;
       }
 
-      snapshot.docChanges().forEach((change) => {
+      const docChanges = snapshot.docChanges();
+      // Sort changes by date if they have timestamps to process latest first
+      const sortedChanges = [...docChanges].sort((a, b) => {
+        const timeA = a.doc.data().createdAt?.toMillis() || 0;
+        const timeB = b.doc.data().createdAt?.toMillis() || 0;
+        return timeB - timeA;
+      });
+
+      sortedChanges.forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
           
           // Suppression Logic: Don't show toast if user is already on the linked page
+          // BUT: Always show for high-priority types like 'team_invite'
           const isCurrentPage = data?.link === location?.pathname;
+          const isHighPriority = data?.type === 'team_invite';
           
-          if (!data?.isRead && !isCurrentPage) {
+          if (!data?.isRead && (!isCurrentPage || isHighPriority)) {
             toast(
               (t) => (
                 <div className="flex flex-col gap-1">

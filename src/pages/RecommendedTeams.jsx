@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import MatchTeamCard from '../components/MatchTeamCard';
 import Sidebar from '../components/Sidebar';

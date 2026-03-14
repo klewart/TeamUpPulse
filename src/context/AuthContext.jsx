@@ -5,8 +5,8 @@ import {
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult
+  signInWithPopup,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -48,10 +48,15 @@ export const AuthProvider = ({ children }) => {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
-  // Login with Google (Redirect Version for COOP stability)
+  // Login with Google (Switching to Popup for better UI feedback)
   const googleSignIn = () => {
     const provider = new GoogleAuthProvider();
-    return signInWithRedirect(auth, provider);
+    return signInWithPopup(auth, provider);
+  };
+
+  // Password Reset
+  const resetPassword = (email) => {
+    return sendPasswordResetEmail(auth, email);
   };
 
   // Logout
@@ -62,11 +67,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let unsubscribeProfile = null;
 
-    // Handle redirect results on mount
-    getRedirectResult(auth).catch((error) => {
-      console.error("Google redirect result error:", error);
-    });
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       // Cleanup previous listener immediately
       if (unsubscribeProfile) {
@@ -75,12 +75,14 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (user) {
-        setLoading(true);
+        // 1. Eagerly set current user to base auth state so UI can unlock immediately
+        setCurrentUser(user);
+        setLoading(false); 
+
         const profileRef = doc(db, 'users', user.uid);
         
         try {
-          // 1. Initial Doc Check/Creation 
-          // (Handle Google users who might not have a doc yet)
+          // 2. Background Doc Check/Creation 
           const docSnap = await getDoc(profileRef);
           if (!docSnap.exists()) {
             await setDoc(profileRef, {
@@ -93,24 +95,21 @@ export const AuthProvider = ({ children }) => {
             });
           }
 
-          // 2. Setup Real-time Listener
+          // 3. Setup Real-time Profile Listener
           unsubscribeProfile = onSnapshot(profileRef, (snapshot) => {
             if (snapshot.exists()) {
               const profileData = snapshot.data();
               
-              // Create a clean user object with strict priority
-              // Firestore (site-uploaded) photoURL always wins over user.photoURL (Gmail icon)
               const newUser = { 
                 uid: user.uid,
                 email: user.email,
                 displayName: profileData.name || user.displayName || 'User',
                 name: profileData.name || user.displayName || 'User',
                 photoURL: profileData.photoURL || user.photoURL || null,
-                ...profileData, // Spread rest of Firestore data (bio, skills, etc.)
+                ...profileData, 
               };
 
               setCurrentUser(prevUser => {
-                // Deep comparison to prevent identity churn
                 const hasChanged = !prevUser || 
                   prevUser.uid !== newUser.uid ||
                   prevUser.name !== newUser.name ||
@@ -120,26 +119,12 @@ export const AuthProvider = ({ children }) => {
                 
                 return hasChanged ? newUser : prevUser;
               });
-            } else {
-              // Fallback to basic auth user if doc doesn't exist (unlikely due to check above)
-              setCurrentUser({
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName || 'User',
-                name: user.displayName || 'User',
-                photoURL: user.photoURL || null
-              });
             }
-            setLoading(false);
           }, (error) => {
             console.error("Profile listener error:", error);
-            setCurrentUser(user);
-            setLoading(false);
           });
         } catch (error) {
-          console.error("Auth init error:", error);
-          setCurrentUser(user);
-          setLoading(false);
+          console.error("Auth init background error:", error);
         }
       } else {
         setCurrentUser(null);
@@ -158,7 +143,8 @@ export const AuthProvider = ({ children }) => {
     signup,
     login,
     googleSignIn,
-    logout
+    logout,
+    resetPassword
   };
 
   return (
@@ -188,24 +174,7 @@ export const AuthProvider = ({ children }) => {
           }}></div>
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
           <h2 style={{ color: '#1e293b', margin: '0 0 8px 0', fontSize: '1.25rem' }}>Initializing TeamUpPulse...</h2>
-          <p style={{ color: '#64748b', marginBottom: '24px', maxWidth: '300px' }}>Connecting to your secure workspace. This usually takes a second.</p>
-          
-          <button 
-            onClick={() => setLoading(false)}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#fff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '10px',
-              color: '#475569',
-              fontWeight: 500,
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            Entering workspace anyway →
-          </button>
+          <p style={{ color: '#64748b', marginBottom: '24px', maxWidth: '300px' }}>Connecting to your secure workspace...</p>
         </div>
       ) : children}
     </AuthContext.Provider>

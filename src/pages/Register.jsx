@@ -10,8 +10,15 @@ const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { signup, googleSignIn } = useAuth();
+  const { signup, googleSignIn, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Auto-redirect if already logged in
+  React.useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

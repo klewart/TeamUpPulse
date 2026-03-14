@@ -1,10 +1,17 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Code, Users, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Landing = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, loading } = useAuth();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!loading && currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, loading, navigate]);
   
   return (
     <div className="flex flex-col">
