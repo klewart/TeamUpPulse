@@ -80,16 +80,54 @@ const TeamChat = () => {
   }, [team, error, id]);
 
   // 3. Send Message Logic
-  const handleSendMessage = async (text) => {
-    if (!text.trim() || !currentUser || !team) return;
+  const handleSendMessage = async (text, file = null) => {
+    if ((!text.trim() && !file) || !currentUser || !team) return;
+
+    let fileData = null;
 
     try {
+      if (file) {
+        // Handle Cloudinary Upload
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+        if (!cloudName || !uploadPreset) {
+           alert("Cloudinary credentials missing in .env. Please check the setup instructions.");
+           return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', uploadPreset);
+
+        // Fetch API for Cloudinary unsigned upload
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || "Cloudinary upload failed");
+        }
+
+        const data = await response.json();
+        
+        fileData = {
+          fileUrl: data.secure_url,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
+        };
+      }
+
       const messagesRef = collection(db, 'teams', id, 'messages');
       await addDoc(messagesRef, {
         text: text,
         senderId: currentUser.uid,
         senderName: currentUser.displayName || 'Anonymous Member',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        attachment: fileData // Will be null if no file
       });
 
       // Create notifications for other team members
