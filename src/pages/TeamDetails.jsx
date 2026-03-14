@@ -165,7 +165,7 @@ const TeamDetails = () => {
         userId: team.createdBy,
         type: 'join_request',
         title: 'New Join Request',
-        message: `${currentUser.displayName || 'A user'} wants to join ${team.teamName}`,
+        message: `${currentUser.name || 'A user'} wants to join ${team.teamName}`,
         link: `/team/${team.id}`,
         isRead: false,
         createdAt: serverTimestamp()
@@ -210,6 +210,21 @@ const TeamDetails = () => {
         isRead: false,
         createdAt: serverTimestamp()
       });
+
+      // Notify all other existing members
+      const otherMembers = team.members.filter(m => m !== userId && m !== currentUser.uid);
+      const notificationPromises = otherMembers.map(memberId => 
+        addDoc(collection(db, 'notifications'), {
+          userId: memberId,
+          type: 'info',
+          title: 'New Teammate!',
+          message: `${acceptedUser?.name || 'A new user'} has joined ${team.teamName}.`,
+          link: `/team/${team.id}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        })
+      );
+      await Promise.all(notificationPromises);
 
     } catch (err) {
       alert('Failed to accept request: ' + err.message);

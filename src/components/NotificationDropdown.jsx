@@ -3,11 +3,12 @@ import { db } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Bell, Check, UserPlus, MessageSquare, Info, ListTodo, CheckCircle2, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const NotificationDropdown = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -24,7 +25,7 @@ const NotificationDropdown = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch notifications
+  // Fetch notifications with active chat suppression
   useEffect(() => {
     if (!currentUser) return;
 
@@ -35,14 +36,39 @@ const NotificationDropdown = () => {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const fetched = [];
       let unread = 0;
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        fetched.push({ id: doc.id, ...data });
-        if (!data.isRead) unread++;
+      
+      const suppressionTasks = [];
+
+      snapshot.forEach((snapshotDoc) => {
+        const data = snapshotDoc.data();
+        const notificationId = snapshotDoc.id;
+
+        // Active Chat Suppression Logic:
+        // If it's a message from the current team chat page the user is on,
+        // mark it as read immediately and don't count it as unread.
+        const isCurrentChatPage = data.type === 'new_message' && data.link === location.pathname;
+        
+        if (isCurrentChatPage && !data.isRead) {
+          // Auto-mark as read in the background
+          suppressionTasks.push(updateDoc(doc(db, 'notifications', notificationId), { isRead: true }));
+          fetched.push({ id: notificationId, ...data, isRead: true });
+        } else {
+          fetched.push({ id: notificationId, ...data });
+          if (!data.isRead) unread++;
+        }
       });
+
+      if (suppressionTasks.length > 0) {
+        try {
+          await Promise.all(suppressionTasks);
+        } catch (err) {
+          console.error("Failed to auto-suppress notifications", err);
+        }
+      }
+
       setNotifications(fetched);
       setUnreadCount(unread);
     }, (error) => {
@@ -50,7 +76,7 @@ const NotificationDropdown = () => {
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser, location.pathname]);
 
   const handleNotificationClick = async (notification) => {
     // 1. Mark as read

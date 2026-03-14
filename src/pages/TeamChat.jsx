@@ -99,8 +99,8 @@ const TeamChat = () => {
           addDoc(collection(db, 'notifications'), {
             userId: memberId,
             type: 'new_message',
-            title: `New message from ${currentUser.displayName || 'a teammate'}`,
-            message: `${currentUser.displayName || 'Someone'} sent a message in ${team.teamName}.`,
+            title: `New message from ${currentUser.name || 'a teammate'}`,
+            message: `${currentUser.name || 'Someone'} sent a message in ${team.teamName}.`,
             link: `/team/${team.id}/chat`,
             isRead: false,
             createdAt: serverTimestamp()

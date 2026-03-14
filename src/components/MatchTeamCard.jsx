@@ -47,7 +47,7 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
         userId: createdBy,
         type: 'join_request',
         title: 'New Join Request',
-        message: `${currentUser.displayName || 'A user'} wants to join ${teamName}`,
+        message: `${currentUser.name || 'A user'} wants to join ${teamName}`,
         link: `/team/${id}`,
         isRead: false,
         createdAt: serverTimestamp()
