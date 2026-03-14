@@ -14,68 +14,77 @@ import TeamChat from './pages/TeamChat';
 import TeamTasks from './pages/TeamTasks';
 import TeamFeedback from './pages/TeamFeedback';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import NotificationToastListener from './components/NotificationToastListener';
+
+const AuthContent = () => {
+  const { currentUser } = useAuth();
+  return (
+    <>
+      <Toaster />
+      {currentUser && <NotificationToastListener />}
+      <Routes>
+        <Route path="/" element={<MainLayout />}>
+          <Route index element={<Landing />} />
+          <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
+          <Route path="dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="create-team" element={
+            <ProtectedRoute>
+              <CreateTeam />
+            </ProtectedRoute>
+          } />
+          <Route path="teams" element={
+            <ProtectedRoute>
+              <BrowseTeams />
+            </ProtectedRoute>
+          } />
+          <Route path="recommendations" element={
+            <ProtectedRoute>
+              <RecommendedTeams />
+            </ProtectedRoute>
+          } />
+          <Route path="team/:id" element={
+            <ProtectedRoute>
+              <TeamDetails />
+            </ProtectedRoute>
+          } />
+          <Route path="team/:id/chat" element={
+            <ProtectedRoute>
+              <TeamChat />
+            </ProtectedRoute>
+          } />
+          <Route path="team/:id/tasks" element={
+            <ProtectedRoute>
+              <TeamTasks />
+            </ProtectedRoute>
+          } />
+          <Route path="team/:id/feedback" element={
+            <ProtectedRoute>
+              <TeamFeedback />
+            </ProtectedRoute>
+          } />
+        </Route>
+      </Routes>
+    </>
+  );
+};
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster />
-        <NotificationToastListener />
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<Landing />} />
-            <Route path="login" element={<Login />} />
-            <Route path="register" element={<Register />} />
-            <Route path="dashboard" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="profile" element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } />
-            <Route path="create-team" element={
-              <ProtectedRoute>
-                <CreateTeam />
-              </ProtectedRoute>
-            } />
-            <Route path="teams" element={
-              <ProtectedRoute>
-                <BrowseTeams />
-              </ProtectedRoute>
-            } />
-            <Route path="recommendations" element={
-              <ProtectedRoute>
-                <RecommendedTeams />
-              </ProtectedRoute>
-            } />
-            <Route path="team/:id" element={
-              <ProtectedRoute>
-                <TeamDetails />
-              </ProtectedRoute>
-            } />
-            <Route path="team/:id/chat" element={
-              <ProtectedRoute>
-                <TeamChat />
-              </ProtectedRoute>
-            } />
-            <Route path="team/:id/tasks" element={
-              <ProtectedRoute>
-                <TeamTasks />
-              </ProtectedRoute>
-            } />
-            <Route path="team/:id/feedback" element={
-              <ProtectedRoute>
-                <TeamFeedback />
-              </ProtectedRoute>
-            } />
-          </Route>
-        </Routes>
+        <AuthContent />
       </AuthProvider>
     </BrowserRouter>
   );

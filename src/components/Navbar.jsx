@@ -72,7 +72,7 @@ const Navbar = () => {
                         <img src={currentUser.photoURL} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-blue-600 font-bold text-sm">
-                          {getInitials(currentUser.name)}
+                          {getInitials(currentUser.displayName || currentUser.name || 'U')}
                         </span>
                       )}
                     </div>

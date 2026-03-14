@@ -36,14 +36,14 @@ const NotificationToastListener = () => {
           const data = change.doc.data();
           
           // Suppression Logic: Don't show toast if user is already on the linked page
-          const isCurrentPage = data.link === location.pathname;
+          const isCurrentPage = data?.link === location?.pathname;
           
-          if (!data.isRead && !isCurrentPage) {
+          if (!data?.isRead && !isCurrentPage) {
             toast(
               (t) => (
                 <div className="flex flex-col gap-1">
-                  <span className="font-bold text-slate-900">{data.title}</span>
-                  <span className="text-sm text-slate-500 line-clamp-2">{data.message}</span>
+                  <span className="font-bold text-slate-900">{data?.title || 'Notification'}</span>
+                  <span className="text-sm text-slate-500 line-clamp-2">{data?.message || ''}</span>
                 </div>
               ),
               {
@@ -63,10 +63,13 @@ const NotificationToastListener = () => {
           }
         }
       });
+    }, (error) => {
+      console.error("Notification Toast Listener Error:", error);
+      // Don't toast errors to user, just log them silently
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   return null; // Headless component
 };

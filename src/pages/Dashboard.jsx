@@ -15,38 +15,38 @@ const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
-  const [profileData, setProfileData] = useState(null);
   const [createdTeams, setCreatedTeams] = useState([]);
   const [joinedTeams, setJoinedTeams] = useState([]);
   const [recommendedTeams, setRecommendedTeams] = useState([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dataLoaded, setDataLoaded] = useState({ created: false, joined: false });
 
+  // 1. Real-time Teams Listeners
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser?.uid) return;
 
-    setLoading(true);
-    
-    // 1. Real-time Profile Listener
-    const userRef = doc(db, 'users', currentUser.uid);
-    const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setProfileData(docSnap.data());
-      }
-    });
-
-    // 2. Real-time Created Teams Listener
     const teamsRef = collection(db, 'teams');
+    
+    // Fail-safe: Force loading to false after 3 seconds if snapshots hang
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
+
+    // Lead Teams
     const createdQ = query(teamsRef, where('createdBy', '==', currentUser.uid));
     const unsubscribeCreated = onSnapshot(createdQ, (snapshot) => {
       const teams = [];
       snapshot.forEach(doc => teams.push({ id: doc.id, ...doc.data() }));
       setCreatedTeams(teams);
-      setLoading(false);
+      setDataLoaded(prev => ({ ...prev, created: true }));
+    }, (err) => {
+      console.error("Created teams listener error:", err);
+      setDataLoaded(prev => ({ ...prev, created: true }));
     });
 
-    // 3. Real-time Joined Teams Listener
+    // Collaborating Teams
     const joinedQ = query(teamsRef, where('members', 'array-contains', currentUser.uid));
     const unsubscribeJoined = onSnapshot(joinedQ, (snapshot) => {
       const teams = [];
@@ -57,51 +57,67 @@ const Dashboard = () => {
         }
       });
       setJoinedTeams(teams);
-      setLoading(false);
+      setDataLoaded(prev => ({ ...prev, joined: true }));
+    }, (err) => {
+      console.error("Joined teams listener error:", err);
+      setDataLoaded(prev => ({ ...prev, joined: true }));
     });
 
     return () => {
-      unsubscribeProfile();
+      clearTimeout(timer);
       unsubscribeCreated();
       unsubscribeJoined();
     };
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
-  // Real-time Recommendations: Listen to all teams and calculate matches based on current profile skills
+  // Handle loading state based on data load completion
   useEffect(() => {
-    if (!currentUser || !profileData?.skills) return;
+    if (dataLoaded.created && dataLoaded.joined) {
+      setLoading(false);
+    }
+  }, [dataLoaded]);
 
-    const teamsRef = collection(db, 'teams');
-    const unsubscribeRecs = onSnapshot(teamsRef, (snapshot) => {
-      const recommendations = [];
-      
-      snapshot.forEach(doc => {
-        const tData = doc.data();
-        // Skip if user is already a member, if team is full, or if user is creator
-        const isMember = tData.members?.includes(currentUser.uid);
-        const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
-        
-        if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
-          const matchResult = calculateSkillMatch(profileData.skills, tData.requiredSkills || []);
-          if (matchResult.score > 0) {
-            recommendations.push({
-              id: doc.id,
-              ...tData,
-              matchResult
-            });
+  // 2. Fetch recommendations (One-time or on skill change, NOT on every team update)
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      if (!currentUser?.skills || currentUser.skills.length === 0) {
+        setRecommendedTeams([]);
+        return;
+      }
+
+      try {
+        const teamsRef = collection(db, 'teams');
+        const allTeamsSnap = await getDocs(teamsRef);
+        const recommendations = [];
+
+        allTeamsSnap.forEach(doc => {
+          const tData = doc.data();
+          const isMember = tData.members?.includes(currentUser.uid);
+          const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
+          
+          if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
+            const matchResult = calculateSkillMatch(currentUser.skills, tData.requiredSkills || []);
+            if (matchResult.score > 0) {
+              recommendations.push({
+                id: doc.id,
+                ...tData,
+                matchResult
+              });
+            }
           }
-        }
-      });
+        });
 
-      // Sort by match score and take top 3
-      recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
-      setRecommendedTeams(recommendations.slice(0, 3));
-    }, (error) => {
-      console.error("Failed to sync recommendations:", error);
-    });
+        recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
+        setRecommendedTeams(recommendations.slice(0, 3));
+      } catch (err) {
+        console.error("Failed to fetch recommendations:", err);
+      }
+    };
 
-    return () => unsubscribeRecs();
-  }, [currentUser, profileData?.skills]);
+    if (currentUser) {
+      fetchRecommendations();
+    }
+  }, [currentUser?.uid, currentUser?.skills]);
 
   if (loading) {
     return (
@@ -119,7 +135,7 @@ const Dashboard = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            Welcome back, {profileData?.name ? profileData.name.split(' ')[0] : 'Student'}! 👋
+            Welcome back, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Student'}! 👋
           </h1>
           <p className="text-slate-600 mt-1">Here is what's happening in your teams today.</p>
         </div>
@@ -144,7 +160,7 @@ const Dashboard = () => {
         {/* Left Column: Sidebar & Profile */}
         <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-24 h-fit">
           <Sidebar />
-          <ProfileSummary profileData={profileData} />
+          <ProfileSummary profileData={currentUser} />
         </div>
 
         {/* Right Column: Main Content Feed */}

@@ -26,7 +26,16 @@ const Register = () => {
       await signup(email, password, name);
       navigate('/dashboard');
     } catch (err) {
-      setError('Failed to create an account: ' + err.message);
+      if (err.code === 'auth/email-already-in-use') {
+        setError(
+          <span>
+            This email is already registered. Try{' '}
+            <Link to="/login" className="font-bold underline">logging in</Link> instead!
+          </span>
+        );
+      } else {
+        setError('Failed to create an account: ' + err.message);
+      }
     } finally {
       setLoading(false);
     }
