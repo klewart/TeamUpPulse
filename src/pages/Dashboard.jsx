@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Loader2, Award, Briefcase, Zap } from 'lucide-react';
+import { Plus, Loader2, Award, Briefcase, Zap, Check, X, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
 
 import Sidebar from '../components/Sidebar';
 import ProfileSummary from '../components/ProfileSummary';
@@ -18,6 +18,7 @@ const Dashboard = () => {
   const [createdTeams, setCreatedTeams] = useState([]);
   const [joinedTeams, setJoinedTeams] = useState([]);
   const [recommendedTeams, setRecommendedTeams] = useState([]);
+  const [teamInvites, setTeamInvites] = useState([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,10 +64,19 @@ const Dashboard = () => {
       setDataLoaded(prev => ({ ...prev, joined: true }));
     });
 
+    // Team Invites
+    const invitesQ = query(collection(db, 'teamInvites'), where('receiverId', '==', currentUser.uid), where('status', '==', 'pending'));
+    const unsubscribeInvites = onSnapshot(invitesQ, (snapshot) => {
+      const invites = [];
+      snapshot.forEach(doc => invites.push({ id: doc.id, ...doc.data() }));
+      setTeamInvites(invites);
+    });
+
     return () => {
       clearTimeout(timer);
       unsubscribeCreated();
       unsubscribeJoined();
+      unsubscribeInvites();
     };
   }, [currentUser?.uid]);
 
@@ -119,6 +129,39 @@ const Dashboard = () => {
     }
   }, [currentUser?.uid, currentUser?.skills]);
 
+  const handleAcceptInvite = async (invite) => {
+    try {
+      setLoading(true);
+      // Add user to team members
+      const teamRef = doc(db, 'teams', invite.projectId);
+      await updateDoc(teamRef, {
+        members: arrayUnion(currentUser.uid)
+      });
+      
+      // Update invite status
+      const inviteRef = doc(db, 'teamInvites', invite.id);
+      await updateDoc(inviteRef, {
+        status: 'accepted'
+      });
+      
+      setLoading(false);
+    } catch (err) {
+      alert('Failed to accept invite: ' + err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleRejectInvite = async (inviteId) => {
+    try {
+      const inviteRef = doc(db, 'teamInvites', inviteId);
+      await updateDoc(inviteRef, {
+        status: 'rejected'
+      });
+    } catch (err) {
+      alert('Failed to reject invite: ' + err.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -166,6 +209,43 @@ const Dashboard = () => {
         {/* Right Column: Main Content Feed */}
         <div className="lg:col-span-9 space-y-10">
           
+          {/* Section: Pending Invites */}
+          {teamInvites.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-5">
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  Team Invitations ({teamInvites.length})
+                </h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {teamInvites.map(invite => (
+                  <div key={invite.id} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm shadow-blue-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div>
+                      <p className="text-sm text-slate-500 mb-1">Invitation to join</p>
+                      <h3 className="text-lg font-bold text-slate-900">{invite.projectName}</h3>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto mt-3 sm:mt-0">
+                      <button
+                        onClick={() => handleAcceptInvite(invite)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-xl border border-emerald-200 transition-colors"
+                      >
+                        <Check className="w-4 h-4" /> Accept
+                      </button>
+                      <button
+                        onClick={() => handleRejectInvite(invite.id)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-xl border border-rose-100 transition-colors"
+                      >
+                        <X className="w-4 h-4" /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Section: Teams Created */}
           <section>
             <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-5">

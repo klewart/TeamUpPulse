@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, writeBatch, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { Loader2, Users, ArrowLeft, UserPlus, CheckCircle2, MessageSquare, ListTodo, Star, UserMinus, LogOut, Trash2, Hourglass, X, Check } from 'lucide-react';
+import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
+import { Loader2, Users, ArrowLeft, UserPlus, CheckCircle2, MessageSquare, ListTodo, Star, UserMinus, LogOut, Trash2, Hourglass, X, Check, Search } from 'lucide-react';
 import SkillTag from '../components/SkillTag';
 import { calculateSkillMatch } from '../utils/matchUtils';
 
@@ -20,6 +20,8 @@ const TeamDetails = () => {
   const [error, setError] = useState('');
   const [joining, setJoining] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showBrowseModal, setShowBrowseModal] = useState(false);
+  const [invitedUsers, setInvitedUsers] = useState(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -69,6 +71,23 @@ const TeamDetails = () => {
 
     return () => unsubscribe();
   }, [id, currentUser]);
+
+  useEffect(() => {
+    // Fetch pending invites to disable "Request to Invite" for already invited users
+    const isTeamCreator = team?.createdBy === currentUser?.uid;
+    if (!id || !isTeamCreator) return;
+    
+    const invitesRef = collection(db, 'teamInvites');
+    const q = query(invitesRef, where('projectId', '==', id), where('status', '==', 'pending'));
+    
+    const unsubscribeInvites = onSnapshot(q, (snapshot) => {
+       const invitedIds = new Set();
+       snapshot.forEach(doc => invitedIds.add(doc.data().receiverId));
+       setInvitedUsers(invitedIds);
+    });
+
+    return () => unsubscribeInvites();
+  }, [id, team?.createdBy, currentUser?.uid]);
 
   const fetchMemberProfiles = async (memberIds) => {
     try {
@@ -141,6 +160,39 @@ const TeamDetails = () => {
       
     } catch (err) {
       console.error("Failed to load suggestions:", err);
+    }
+  };
+
+  const handleSendInvite = async (userId, userName) => {
+    if (!currentUser || !team) return;
+    
+    try {
+      setActionLoading(true);
+      await addDoc(collection(db, 'teamInvites'), {
+        projectId: team.id,
+        projectName: team.teamName,
+        senderId: currentUser.uid,
+        receiverId: userId,
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      
+      // Also notify the user
+      await addDoc(collection(db, 'notifications'), {
+        userId: userId,
+        type: 'team_invite',
+        title: 'New Team Invitation',
+        message: `${currentUser.name || 'Someone'} invited you to join ${team.teamName}`,
+        link: `/dashboard`,
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+      
+      alert(`Invitation sent to ${userName}!`);
+    } catch (err) {
+      alert('Failed to send invite: ' + err.message);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -377,7 +429,15 @@ const TeamDetails = () => {
                     <span>{team.members?.length || 0} / {team.maxMembers}</span>
                   </div>
                   {(isCreator || isMember) && (
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-wrap gap-2 mt-2 justify-end">
+                       {isCreator && (
+                         <button 
+                           onClick={() => setShowBrowseModal(true)}
+                           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold border border-blue-700 transition-colors shadow-sm text-sm"
+                         >
+                           <Search className="w-4 h-4" /> Browse Members
+                         </button>
+                       )}
                        <button 
                          onClick={() => navigate(`/team/${team.id}/tasks`)}
                          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-semibold border border-indigo-700 transition-colors shadow-sm text-sm"
@@ -563,7 +623,7 @@ const TeamDetails = () => {
                       
                       <div className="pl-2 flex justify-between items-start mb-2">
                         <h4 className="font-bold text-slate-900 truncate pr-2">{user.name}</h4>
-                        <span className="text-sm font-black text-indigo-600 flex-shrink-0">{user.matchResult.score}%</span>
+                        <span className="text-sm font-black text-indigo-600 flex-shrink-0">{user.matchResult?.score || 0}%</span>
                       </div>
                       
                       {user.university && (
@@ -571,13 +631,13 @@ const TeamDetails = () => {
                       )}
                       
                       <div className="pl-2 flex flex-wrap gap-1">
-                        {user.matchResult.matchedSkills.slice(0,3).map((skill, i) => (
+                        {user.matchResult?.matchedSkills?.slice(0,3).map((skill, i) => (
                           <span key={i} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/50">
                             {skill}
                           </span>
                         ))}
-                        {user.matchResult.matchedSkills.length > 3 && (
-                          <span className="text-[10px] text-slate-400 font-medium">+{user.matchResult.matchedSkills.length - 3}</span>
+                        {user.matchResult?.matchedSkills?.length > 3 && (
+                          <span className="text-[10px] text-slate-400 font-medium">+{(user.matchResult?.matchedSkills?.length || 0) - 3}</span>
                         )}
                       </div>
                     </div>
@@ -587,6 +647,90 @@ const TeamDetails = () => {
             </div>
           )}
         </div>
+
+        {/* Browse Members Modal */}
+        {showBrowseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <Users className="w-6 h-6 text-blue-600" /> Browse Matching Members
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">We found these users based on your project's required skills.</p>
+                </div>
+                <button 
+                  onClick={() => setShowBrowseModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-1">
+                {suggestedTeammates.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-700">No matching users found</h3>
+                    <p className="text-slate-500 max-w-md mx-auto mt-2">We couldn't find any users matching your required skills right now. Try updating your required skills or check back later.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {suggestedTeammates.map(user => (
+                      <div key={user.uid} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col relative overflow-hidden">
+                        <div className="absolute top-0 right-0 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-bl-lg border-b border-l border-blue-100">
+                          {user.matchResult?.score || 0}% Match
+                        </div>
+                        
+                        <div className="flex items-center gap-3 mb-3 mt-2">
+                           <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-200">
+                             {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+                           </div>
+                           <div>
+                             <h4 className="font-bold text-slate-900 leading-tight">{user.name}</h4>
+                             <p className="text-xs text-slate-500 mt-0.5">{user.university || 'No university listed'}</p>
+                           </div>
+                        </div>
+                        
+                        <div className="mb-4 flex-1">
+                          <p className="text-xs text-slate-500 mb-1.5 font-medium">Matched Skills:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {user.matchResult?.matchedSkills?.map((skill, i) => (
+                              <span key={i} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                                {skill}
+                              </span>
+                            ))}
+                            {user.matchResult?.missingSkills?.length > 0 && (
+                              <span className="text-[10px] font-medium text-slate-400 border border-slate-200 px-2 py-0.5 rounded-md" title={`Missing: ${user.matchResult.missingSkills.join(', ')}`}>
+                                {`+${user.matchResult.missingSkills.length} more reqs`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="mt-auto">
+                          {invitedUsers.has(user.uid) ? (
+                            <button disabled className="w-full py-2 bg-slate-100 text-slate-500 font-semibold rounded-lg text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                              <Check className="w-4 h-4" /> Request Sent
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => handleSendInvite(user.uid, user.name)}
+                              disabled={actionLoading}
+                              className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-lg text-sm transition-colors border border-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              <UserPlus className="w-4 h-4" /> Request to Invite
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
