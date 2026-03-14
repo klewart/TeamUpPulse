@@ -123,6 +123,17 @@ const TeamFeedback = () => {
         comment: comment.trim(),
         createdAt: serverTimestamp(),
       });
+
+      // Send Notification to Reviewed User
+      await addDoc(collection(db, 'notifications'), {
+        userId: selectedUserId,
+        type: 'info',
+        title: 'New Peer Evaluation',
+        message: `${currentUser.name || 'A teammate'} submitted a review for you in ${team.teamName}.`,
+        link: `/team/${id}/feedback`,
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
       
       // Reset form
       setSelectedUserId('');

@@ -32,13 +32,7 @@ const Dashboard = () => {
     const userRef = doc(db, 'users', currentUser.uid);
     const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProfileData(data);
-        
-        // Trigger recommendations update if skills exist
-        if (data.skills?.length > 0) {
-          fetchRecommendations(data.skills);
-        }
+        setProfileData(docSnap.data());
       }
     });
 
@@ -73,20 +67,22 @@ const Dashboard = () => {
     };
   }, [currentUser]);
 
-  // Recommendations still use a one-time fetch but are triggered by profile updates
-  const fetchRecommendations = async (userSkills) => {
-    try {
-      const teamsRef = collection(db, 'teams');
-      const allTeamsSnap = await getDocs(teamsRef);
-      const recommendations = [];
+  // Real-time Recommendations: Listen to all teams and calculate matches based on current profile skills
+  useEffect(() => {
+    if (!currentUser || !profileData?.skills) return;
 
-      allTeamsSnap.forEach(doc => {
+    const teamsRef = collection(db, 'teams');
+    const unsubscribeRecs = onSnapshot(teamsRef, (snapshot) => {
+      const recommendations = [];
+      
+      snapshot.forEach(doc => {
         const tData = doc.data();
+        // Skip if user is already a member, if team is full, or if user is creator
         const isMember = tData.members?.includes(currentUser.uid);
-        const isFull = tData.members?.length >= tData.maxMembers;
+        const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
         
         if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
-          const matchResult = calculateSkillMatch(userSkills, tData.requiredSkills || []);
+          const matchResult = calculateSkillMatch(profileData.skills, tData.requiredSkills || []);
           if (matchResult.score > 0) {
             recommendations.push({
               id: doc.id,
@@ -97,12 +93,15 @@ const Dashboard = () => {
         }
       });
 
+      // Sort by match score and take top 3
       recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
       setRecommendedTeams(recommendations.slice(0, 3));
-    } catch (err) {
-      console.error("Failed to fetch recommendations:", err);
-    }
-  };
+    }, (error) => {
+      console.error("Failed to sync recommendations:", error);
+    });
+
+    return () => unsubscribeRecs();
+  }, [currentUser, profileData?.skills]);
 
   if (loading) {
     return (

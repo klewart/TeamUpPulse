@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, getDocs, doc, updateDoc, arrayUnion, query, orderBy } from 'firebase/firestore';
+import { collection, updateDoc, arrayUnion, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { Search, Loader2 } from 'lucide-react';
 import TeamCard from '../components/TeamCard';
 import Sidebar from '../components/Sidebar';
@@ -15,28 +15,25 @@ const BrowseTeams = () => {
   const [joiningId, setJoiningId] = useState(null);
 
   useEffect(() => {
-    fetchTeams();
-  }, []);
-
-  const fetchTeams = async () => {
-    try {
-      setLoading(true);
-      const teamsRef = collection(db, 'teams');
-      const q = query(teamsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
+    setLoading(true);
+    const teamsRef = collection(db, 'teams');
+    const q = query(teamsRef, orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const teamsData = [];
-      querySnapshot.forEach((doc) => {
+      snapshot.forEach((doc) => {
         teamsData.push({ id: doc.id, ...doc.data() });
       });
-      
       setTeams(teamsData);
-    } catch (err) {
-      setError('Failed to load teams: ' + err.message);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Browse teams sync error:", err);
+      setError('Failed to sync teams. Please check your connection.');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // handleJoinTeam removed because joining is strictly handled on TeamDetails.jsx now
   

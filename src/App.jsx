@@ -15,11 +15,15 @@ import TeamTasks from './pages/TeamTasks';
 import TeamFeedback from './pages/TeamFeedback';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
+import { Toaster } from 'react-hot-toast';
+import NotificationToastListener from './components/NotificationToastListener';
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster />
+        <NotificationToastListener />
         <Routes>
           <Route path="/" element={<MainLayout />}>
             <Route index element={<Landing />} />
