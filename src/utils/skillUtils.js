@@ -53,7 +53,10 @@ const SENIORITY_LEVELS = {
 };
 
 // Flatten all skills for validation
-const ALL_SKILLS = Object.values(SKILLS_DB).flat();
+const ALL_SKILLS = [
+  ...Object.values(SKILLS_DB).flat(),
+  ...Object.values(SENIORITY_LEVELS).flat()
+];
 
 /**
  * Levenshtein distance algorithm for fuzzy matching
