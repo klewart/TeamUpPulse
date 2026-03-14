@@ -18,7 +18,7 @@ const BrowseTeams = () => {
     setLoading(true);
     const teamsRef = collection(db, 'teams');
     const q = query(teamsRef, orderBy('createdAt', 'desc'));
-    
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const teamsData = [];
       snapshot.forEach((doc) => {
@@ -36,7 +36,7 @@ const BrowseTeams = () => {
   }, []);
 
   // handleJoinTeam removed because joining is strictly handled on TeamDetails.jsx now
-  
+
   const filteredTeams = teams.filter(team => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -49,7 +49,7 @@ const BrowseTeams = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Left Column: Navigation Sidebar */}
         <div className="lg:col-span-3 lg:sticky lg:top-24 h-fit hidden lg:block">
           <Sidebar />
@@ -62,14 +62,14 @@ const BrowseTeams = () => {
               <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Discover Teams</h1>
               <p className="text-slate-600 mt-2 text-sm max-w-lg">Find your next project and join forces with other talented students.</p>
             </div>
-            
+
             <div className="relative w-full md:w-96">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search teams by name, topic, or skills..." 
+                placeholder="Search teams by name, topic, or skills..."
                 className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all shadow-sm bg-white"
               />
             </div>
@@ -98,9 +98,9 @@ const BrowseTeams = () => {
                       <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
                     </div>
                   )}
-                  <TeamCard 
-                    team={team} 
-                    currentUserId={currentUser?.uid} 
+                  <TeamCard
+                    team={team}
+                    currentUserId={currentUser?.uid}
                   />
                 </div>
               ))}

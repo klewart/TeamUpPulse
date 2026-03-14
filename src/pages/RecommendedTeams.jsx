@@ -13,7 +13,7 @@ const RecommendedTeams = () => {
   const [recommendedTeams, setRecommendedTeams] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [userCategory, setUserCategory] = useState('fullstack');
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -57,15 +57,15 @@ const RecommendedTeams = () => {
       const processedTeams = [];
       snapshot.forEach((doc) => {
         const teamData = doc.data();
-        
+
         const isMember = teamData.members?.includes(currentUser.uid);
         const isCreator = teamData.createdBy === currentUser.uid;
         const isFull = teamData.members?.length >= teamData.maxMembers;
-        
+
         if (!isMember && !isCreator && !isFull) {
           const teamCategory = categorizeSkillset(teamData.requiredSkills || []);
           const matchResult = calculateSkillMatch(userSkills, teamData.requiredSkills || []);
-          
+
           if (matchResult.score > 0) {
             processedTeams.push({
               id: doc.id,
@@ -83,7 +83,7 @@ const RecommendedTeams = () => {
         if (aMatch !== bMatch) return aMatch - bMatch;
         return b.matchResult.score - a.matchResult.score;
       });
-      
+
       setRecommendedTeams(processedTeams);
       setLoading(false);
     }, (err) => {
@@ -100,7 +100,7 @@ const RecommendedTeams = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Left Column: Navigation Sidebar */}
         <div className="lg:col-span-3 lg:sticky lg:top-24 h-fit hidden lg:block">
           <Sidebar />
@@ -116,9 +116,9 @@ const RecommendedTeams = () => {
                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Smart Matches</h1>
                 <p className="text-slate-600 mt-1">Teams looking for your exact skillset.</p>
                 <div className="mt-2 flex items-center gap-2">
-                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Your Track:</span>
-                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
-                    {userCategory === 'backend' ? 'Backend Focused' : userCategory === 'frontend' ? 'Frontend Focused' : 'Fullstack'}
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Your Track:</span>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100 uppercase tracking-wide">
+                    {userCategory}
                   </span>
                 </div>
               </div>
@@ -156,8 +156,8 @@ const RecommendedTeams = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
               {recommendedTeams.map(team => (
                 <div key={team.id} className="relative">
-                  <MatchTeamCard 
-                    team={team} 
+                  <MatchTeamCard
+                    team={team}
                     matchResult={team.matchResult}
                     category={team.category}
                   />

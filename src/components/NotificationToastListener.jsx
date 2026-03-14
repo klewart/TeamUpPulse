@@ -41,12 +41,12 @@ const NotificationToastListener = () => {
       sortedChanges.forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
-          
+
           // Suppression Logic: Don't show toast if user is already on the linked page
           // BUT: Always show for high-priority types like 'team_invite'
           const isCurrentPage = data?.link === location?.pathname;
           const isHighPriority = data?.type === 'team_invite';
-          
+
           if (!data?.isRead && (!isCurrentPage || isHighPriority)) {
             toast(
               (t) => (

@@ -7,20 +7,53 @@ const SKILLS_DB = {
   frontend: [
     'react', 'vue', 'angular', 'svelte', 'next.js', 'nuxt.js', 'javascript', 'typescript',
     'html', 'css', 'tailwind', 'bootstrap', 'sass', 'less', 'redux', 'mobx', 'zustand',
-    'vite', 'webpack', 'babel', 'flutter', 'react native', 'ionic', 'ui design', 'ux design',
-    'figma', 'adobe xd', 'canvas', 'svg', 'three.js', 'd3.js', 'framer motion'
+    'vite', 'webpack', 'babel', 'ui design', 'ux design'
   ],
   backend: [
     'node.js', 'express', 'nest.js', 'python', 'django', 'flask', 'fastapi', 'go', 'golang',
     'ruby', 'rails', 'php', 'laravel', 'java', 'spring', 'kotlin', 'c#', '.net', 'asp.net',
     'sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'firebase', 'supabase', 'graphql',
-    'rest api', 'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'terraform', 'jenkins',
-    'c++', 'c', 'rust', 'elixir', 'phoenix', 'microservices', 'serverless'
+    'rest api', 'microservices', 'serverless', 'c++', 'c', 'rust'
+  ],
+  devops: [
+    'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'terraform', 'jenkins', 'ansible',
+    'ci/cd', 'nginx', 'linux', 'bash', 'prometheus', 'grafana', 'cloud computing', 'sre'
+  ],
+  data_science: [
+    'pandas', 'numpy', 'tensorflow', 'pytorch', 'scikit-learn', 'machine learning', 'ai',
+    'deep learning', 'data analysis', 'computer vision', 'nlp', 'spark', 'hadoop', 'tableau'
+  ],
+  mobile: [
+    'flutter', 'react native', 'swift', 'ios', 'android', 'dart', 'kotlin', 'objective-c',
+    'mobile development', 'expo'
+  ],
+  designer: [
+    'figma', 'adobe xd', 'sketch', 'ui design', 'ux design', 'product design', 'prototyping',
+    'illustration', 'canva', 'framer'
+  ],
+  cybersecurity: [
+    'penetration testing', 'ethical hacking', 'metasploit', 'wireshark', 'nmap', 'burp suite',
+    'owasp', 'cryptography', 'network security', 'incident response', 'firewalls', 'siem'
+  ],
+  qa_testing: [
+    'selenium', 'cypress', 'playwright', 'jest', 'mocha', 'chai', 'unit testing',
+    'integration testing', 'automation', 'test planning', 'qa', 'appium'
+  ],
+  product_management: [
+    'agile', 'scrum', 'jira', 'confluence', 'product strategy', 'user stories', 'roadmap',
+    'market research', 'analytics', 'kanban', 'prds', 'stakeholder management'
   ]
 };
 
-// Flatten skills for validation
-const ALL_SKILLS = [...SKILLS_DB.frontend, ...SKILLS_DB.backend];
+// Seniority & Role Markers (Specialized keywords that modify the final label)
+const SENIORITY_LEVELS = {
+  architect: ['architecture', 'system design', 'scalability', 'distributed systems', 'cloud architecture'],
+  lead: ['team leadership', 'mentorship', 'project management', 'agile lead', 'scrum master'],
+  junior: ['learning', 'entry level', 'student']
+};
+
+// Flatten all skills for validation
+const ALL_SKILLS = Object.values(SKILLS_DB).flat();
 
 /**
  * Levenshtein distance algorithm for fuzzy matching
@@ -72,47 +105,118 @@ export const validateSkill = (input) => {
   }
 
   if (closestMatch) {
-    return { 
-      valid: false, 
-      isTypo: true, 
+    return {
+      valid: false,
+      isTypo: true,
       suggestion: closestMatch,
-      message: `Did you mean "${closestMatch}"? Please use the correct spelling.` 
+      message: `Did you mean "${closestMatch}"? Please use the correct spelling.`
     };
   }
 
-  return { 
-    valid: false, 
+  return {
+    valid: false,
     isUnknown: true,
-    message: `"${input}" is not a recognized technical skill. Please check your spelling.` 
+    message: `"${input}" is not a recognized technical skill. Please check your spelling.`
   };
 };
 
 /**
- * Identifies the user's track based on their skills
+ * Identifies the user's track based on their skills with an affinity-based scoring system.
  */
 export const identifyTrack = (skills = []) => {
   if (skills.length === 0) return 'Generalist';
 
   const normalizedSkills = skills.map(s => s.toLowerCase().trim());
-  let frontendCount = 0;
-  let backendCount = 0;
+  const scores = {
+    frontend: 0,
+    backend: 0,
+    devops: 0,
+    data_science: 0,
+    mobile: 0,
+    designer: 0,
+    cybersecurity: 0,
+    qa_testing: 0,
+    product_management: 0
+  };
 
-  normalizedSkills.forEach(skill => {
-    if (SKILLS_DB.frontend.includes(skill)) frontendCount++;
-    if (SKILLS_DB.backend.includes(skill)) backendCount++;
+  // Seniority/Modifier detection
+  let seniority = '';
+  Object.entries(SENIORITY_LEVELS).forEach(([level, keywords]) => {
+    if (normalizedSkills.some(skill => keywords.includes(skill))) {
+      // Prioritize Architect over Lead, etc.
+      if (level === 'architect') seniority = 'ARCHITECT';
+      else if (level === 'lead' && seniority !== 'ARCHITECT') seniority = 'LEAD';
+    }
   });
 
-  if (frontendCount > 0 && backendCount > 0) {
-    // If skills are balanced (ratio within 40-60%), call them Fullstack
-    const total = frontendCount + backendCount;
-    const feRatio = frontendCount / total;
-    if (feRatio >= 0.4 && feRatio <= 0.6) return 'Fullstack Developer';
-    
-    return frontendCount > backendCount ? 'Frontend Focused' : 'Backend Focused';
+  normalizedSkills.forEach(skill => {
+    Object.keys(SKILLS_DB).forEach(track => {
+      if (SKILLS_DB[track].some(s => s === skill || skill.includes(s))) {
+        scores[track]++;
+      }
+    });
+  });
+
+  const totalPoints = Object.values(scores).reduce((a, b) => a + b, 0);
+  if (totalPoints === 0) return 'Explorer';
+
+  // Sort tracks by score descending
+  const sortedTracks = Object.entries(scores)
+    .filter(([_, score]) => score > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  const [topTrack, topScore] = sortedTracks[0];
+
+  // Role Synonyms / Hybrid Heuristics
+  const has = (track) => scores[track] > 0;
+  
+  // 1. Creative Technologist (Frontend + Design)
+  if (has('frontend') && has('designer') && (scores.frontend + scores.designer) / totalPoints > 0.6) {
+    return seniority ? `CREATIVE ${seniority}` : 'CREATIVITY TECHNOLOGIST';
   }
 
-  if (frontendCount > 0) return 'Frontend Developer';
-  if (backendCount > 0) return 'Backend Developer';
+  // 2. Site Reliability Engineer (Backend + DevOps)
+  if (has('backend') && has('devops') && (scores.backend + scores.devops) / totalPoints > 0.6) {
+    return seniority ? `PRINCIPAL SRE ${seniority}` : 'SITE RELIABILITY ENGINEER';
+  }
 
-  return 'Generalist';
+  // Helper to format labels
+  const formatLabel = (track) => {
+    const labels = {
+      frontend: 'FRONTEND DEVELOPER',
+      backend: 'BACKEND DEVELOPER',
+      devops: 'DEVOPS ENGINEER',
+      data_science: 'DATA SCIENTIST',
+      mobile: 'MOBILE DEVELOPER',
+      designer: 'UI/UX DESIGNER',
+      cybersecurity: 'CYBERSECURITY ANALYST',
+      qa_testing: 'QA AUTOMATION ENGINEER',
+      product_management: 'PRODUCT MANAGER'
+    };
+    return labels[track] || 'GENERALIST';
+  };
+
+  // Logic: 
+  // 1. Specialist Check
+  if (topScore / totalPoints >= 0.65) {
+    const label = formatLabel(topTrack);
+    return seniority ? `${label} ${seniority}` : `${label} SPECIALIST`;
+  }
+
+  // 2. Fullstack check (Frontend + Backend balance)
+  if (scores.frontend > 0 && scores.backend > 0 && (scores.frontend + scores.backend) / totalPoints > 0.6) {
+    const ratio = scores.frontend / (scores.frontend + scores.backend);
+    if (ratio >= 0.4 && ratio <= 0.6) return 'FULLSTACK DEVELOPER';
+  }
+
+  // 3. Hybrid check (Top two tracks are significant)
+  if (sortedTracks.length >= 2) {
+    const [secondTrack, secondScore] = sortedTracks[1];
+    if (secondScore / topScore > 0.7) {
+      return `HYBRID: ${topTrack.toUpperCase()} / ${secondTrack.toUpperCase()}`;
+    }
+  }
+
+  // 4. Default to top track + Focused
+  return `${formatLabel(topTrack)} FOCUSED`;
 };

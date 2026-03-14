@@ -9,12 +9,12 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [joining, setJoining] = useState(false);
-  
-  const { 
-    id, 
-    teamName, 
-    projectTopic, 
-    members, 
+
+  const {
+    id,
+    teamName,
+    projectTopic,
+    members,
     maxMembers,
     createdBy,
     joinRequests = []
@@ -33,15 +33,15 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
       alert("Please login to join a team");
       return;
     }
-    
+
     try {
       setJoining(true);
       const teamRef = doc(db, 'teams', id);
-      
+
       await updateDoc(teamRef, {
         joinRequests: arrayUnion(currentUser.uid)
       });
-      
+
       // Send Notification to Team Creator
       await addDoc(collection(db, 'notifications'), {
         userId: createdBy,
@@ -54,7 +54,7 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
       });
 
       alert('Request sent successfully!');
-      
+
     } catch (err) {
       alert('Failed to send request: ' + err.message);
     } finally {
@@ -77,22 +77,37 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-5 hover:shadow-md transition-shadow relative overflow-hidden">
-      
+
       {/* Absolute Header Ribbon based on match */}
       <div className={`absolute top-0 left-0 w-full h-1.5 ${getProgressColor(score)}`} />
-      
+
       <div className="flex justify-between items-start mt-1">
         <div>
           <h3 className="text-xl font-bold text-slate-900 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => navigate(`/team/${id}`)}>{teamName}</h3>
           <p className="text-sm font-medium text-slate-500 mt-1">{projectTopic}</p>
           {category && (
-            <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-              <span className="h-1.5 w-1.5 rounded-full" aria-hidden="true" style={{ backgroundColor: category === 'backend' ? '#4f46e5' : category === 'frontend' ? '#ec4899' : '#10b981' }} />
-              {category === 'backend' ? 'Backend' : category === 'frontend' ? 'Frontend' : 'Fullstack'}
+            <span className="mt-2 inline-flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                aria-hidden="true"
+                style={{
+                  backgroundColor:
+                    category.includes('FRONTEND') ? '#ec4899' :
+                    category.includes('BACKEND') ? '#4f46e5' :
+                    category.includes('DEVOPS') ? '#10b981' :
+                    category.includes('DATA') ? '#8b5cf6' :
+                    category.includes('DESIGN') ? '#f59e0b' :
+                    category.includes('MOBILE') ? '#06b6d4' : 
+                    category.includes('CYBER') ? '#dc2626' :
+                    category.includes('QA') ? '#d946ef' :
+                    category.includes('PRODUCT') ? '#ea580c' : '#64748b'
+                }}
+              />
+              {category}
             </span>
           )}
         </div>
-        
+
         <div className="flex flex-col items-end">
           <span className={`text-2xl font-black ${getScoreColor(score)}`}>
             {score}%
@@ -131,14 +146,14 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
             <XCircle className="w-3.5 h-3.5 text-red-400" /> Missing
           </h4>
           <div className="flex flex-col gap-1.5">
-             {missingSkills?.length > 0 ? (
+            {missingSkills?.length > 0 ? (
               missingSkills.map((skill, index) => (
                 <span key={index} className="text-sm text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/50 w-fit">
                   {skill}
                 </span>
               ))
             ) : (
-               <span className="text-sm text-slate-400 italic">None!</span>
+              <span className="text-sm text-slate-400 italic">None!</span>
             )}
           </div>
         </div>
@@ -151,24 +166,24 @@ const MatchTeamCard = ({ team, matchResult, currentUserId, onJoinRequest, catego
         </div>
 
         {isCreator ? (
-           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Team</span>
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Team</span>
         ) : isMember ? (
-           <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg">Joined</span>
+          <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg">Joined</span>
         ) : hasRequested ? (
           <div className="flex items-center gap-1.5 text-sm font-semibold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100/50">
             <Hourglass className="w-3.5 h-3.5 animate-pulse" /> Pending
           </div>
         ) : isFull ? (
-           <span className="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">Full</span>
+          <span className="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">Full</span>
         ) : (
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => navigate(`/team/${id}`)}
               className="text-slate-500 hover:text-slate-900 text-sm font-medium transition-colors px-2"
             >
               Details
             </button>
-            <button 
+            <button
               onClick={handleRequestJoin}
               disabled={joining}
               className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-70"

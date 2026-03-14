@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 const Sidebar = () => {
   const location = useLocation();
   const { logout } = useAuth();
-  
+
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Discover Teams', path: '/teams', icon: Compass },
@@ -28,16 +28,15 @@ const Sidebar = () => {
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.name}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${
-                isActive 
-                  ? 'bg-blue-50 text-blue-700' 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isActive
+                  ? 'bg-blue-50 text-blue-700'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
+                }`}
             >
               <Icon className="w-5 h-5" />
               {item.name}

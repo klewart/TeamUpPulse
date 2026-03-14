@@ -5,15 +5,15 @@ import { useNavigate } from 'react-router-dom';
 
 const TeamCard = ({ team, currentUserId }) => {
   const navigate = useNavigate();
-  const { 
-    id, 
-    teamName, 
-    projectTopic, 
-    description, 
-    requiredSkills, 
-    members, 
-    maxMembers, 
-    createdAt 
+  const {
+    id,
+    teamName,
+    projectTopic,
+    description,
+    requiredSkills,
+    members,
+    maxMembers,
+    createdAt
   } = team;
 
   const isFull = members?.length >= maxMembers;
@@ -27,7 +27,7 @@ const TeamCard = ({ team, currentUserId }) => {
           <h3 className="text-xl font-bold text-slate-900">{teamName}</h3>
           <p className="text-sm font-medium text-blue-600 mt-1">{projectTopic}</p>
         </div>
-        
+
         {isFull && !isMember ? (
           <span className="bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">Full</span>
         ) : isMember ? (
@@ -56,7 +56,7 @@ const TeamCard = ({ team, currentUserId }) => {
         </div>
 
         {!isMember && (
-          <button 
+          <button
             onClick={() => navigate(`/team/${id}`)}
             className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors ml-auto"
           >
@@ -64,34 +64,34 @@ const TeamCard = ({ team, currentUserId }) => {
             <ChevronRight className="w-4 h-4" />
           </button>
         )}
-        
+
         {(isCreator || isMember) && (
-           <div className="flex gap-2 mt-2 flex-wrap justify-end flex-1">
-             <button 
-               onClick={() => navigate(`/team/${id}`)}
-               className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
-             >
-               Details
-             </button>
-             <button 
-               onClick={() => navigate(`/team/${id}/tasks`)}
-               className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
-             >
-               <ListTodo className="w-4 h-4" /> Tasks
-             </button>
-             <button 
-               onClick={() => navigate(`/team/${id}/chat`)}
-               className="flex items-center gap-1.5 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-             >
-               <MessageSquare className="w-4 h-4" /> Chat
-             </button>
-             <button 
-               onClick={() => navigate(`/team/${id}/feedback`)}
-               className="flex items-center gap-1.5 text-sm font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors"
-             >
-               <Star className="w-4 h-4" /> Review
-             </button>
-           </div>
+          <div className="flex gap-2 mt-2 flex-wrap justify-end flex-1">
+            <button
+              onClick={() => navigate(`/team/${id}`)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Details
+            </button>
+            <button
+              onClick={() => navigate(`/team/${id}/tasks`)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <ListTodo className="w-4 h-4" /> Tasks
+            </button>
+            <button
+              onClick={() => navigate(`/team/${id}/chat`)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" /> Chat
+            </button>
+            <button
+              onClick={() => navigate(`/team/${id}/feedback`)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Star className="w-4 h-4" /> Review
+            </button>
+          </div>
         )}
       </div>
     </div>

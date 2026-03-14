@@ -38,7 +38,7 @@ const NotificationDropdown = () => {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const fetched = [];
       let unread = 0;
-      
+
       const suppressionTasks = [];
 
       snapshot.forEach((snapshotDoc) => {
@@ -49,7 +49,7 @@ const NotificationDropdown = () => {
         // If it's a message from the current team chat page the user is on,
         // mark it as read immediately and don't count it as unread.
         const isCurrentChatPage = data.type === 'new_message' && data.link === location.pathname;
-        
+
         if (isCurrentChatPage && !data.isRead) {
           // Auto-mark as read in the background
           suppressionTasks.push(updateDoc(doc(db, 'notifications', notificationId), { isRead: true }));
@@ -102,7 +102,7 @@ const NotificationDropdown = () => {
 
   const handleMarkAllRead = async () => {
     if (unreadCount === 0) return;
-    
+
     try {
       const batch = writeBatch(db);
       notifications.forEach((notif) => {
@@ -119,13 +119,13 @@ const NotificationDropdown = () => {
 
   const getIconForType = (type) => {
     switch (type) {
-      case 'join_request': 
+      case 'join_request':
       case 'team_invite': return <UserPlus className="w-5 h-5 text-blue-500" />;
       case 'request_accepted': return <Check className="w-5 h-5 text-emerald-500" />;
       case 'request_declined': return <X className="w-5 h-5 text-rose-500" />;
       case 'new_message': return <MessageSquare className="w-5 h-5 text-indigo-500" />;
       case 'task_assigned': return <ListTodo className="w-5 h-5 text-yellow-500" />;
-      case 'task_updated': 
+      case 'task_updated':
       case 'team_update': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
       case 'info': return <Info className="w-5 h-5 text-blue-400" />;
       default: return <Bell className="w-5 h-5 text-slate-400" />;
@@ -169,7 +169,7 @@ const NotificationDropdown = () => {
       {/* Dropdown Panel */}
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 transform origin-top-right transition-all">
-          
+
           {/* Header */}
           <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex justify-between items-center">
             <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -179,7 +179,7 @@ const NotificationDropdown = () => {
               )}
             </h3>
             {unreadCount > 0 && (
-              <button 
+              <button
                 onClick={handleMarkAllRead}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
               >
@@ -198,7 +198,7 @@ const NotificationDropdown = () => {
             ) : (
               <div className="divide-y divide-slate-50">
                 {notifications.map((notif) => (
-                  <div 
+                  <div
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
                     className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors cursor-pointer relative ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
@@ -207,11 +207,11 @@ const NotificationDropdown = () => {
                     {!notif.isRead && (
                       <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                     )}
-                    
+
                     <div className="flex-shrink-0 mt-1 pl-1">
                       {getIconForType(notif.type)}
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm tracking-tight ${!notif.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
                         {notif.title}
@@ -228,7 +228,7 @@ const NotificationDropdown = () => {
               </div>
             )}
           </div>
-          
+
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
   const signup = async (email, password, name) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
+
     // Create user document in firestore (ONE-TIME during signup)
     await setDoc(doc(db, 'users', user.uid), {
       uid: user.uid,
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
       university: '',
       createdAt: new Date().toISOString()
     });
-    
+
     return userCredential;
   };
 
@@ -77,10 +77,10 @@ export const AuthProvider = ({ children }) => {
       if (user) {
         // 1. Eagerly set current user to base auth state so UI can unlock immediately
         setCurrentUser(user);
-        setLoading(false); 
+        setLoading(false);
 
         const profileRef = doc(db, 'users', user.uid);
-        
+
         try {
           // 2. Background Doc Check/Creation 
           const docSnap = await getDoc(profileRef);
@@ -99,24 +99,24 @@ export const AuthProvider = ({ children }) => {
           unsubscribeProfile = onSnapshot(profileRef, (snapshot) => {
             if (snapshot.exists()) {
               const profileData = snapshot.data();
-              
-              const newUser = { 
+
+              const newUser = {
                 uid: user.uid,
                 email: user.email,
                 displayName: profileData.name || user.displayName || 'User',
                 name: profileData.name || user.displayName || 'User',
                 photoURL: profileData.photoURL || user.photoURL || null,
-                ...profileData, 
+                ...profileData,
               };
 
               setCurrentUser(prevUser => {
-                const hasChanged = !prevUser || 
+                const hasChanged = !prevUser ||
                   prevUser.uid !== newUser.uid ||
                   prevUser.name !== newUser.name ||
                   prevUser.email !== newUser.email ||
                   prevUser.photoURL !== newUser.photoURL ||
                   JSON.stringify(prevUser.skills) !== JSON.stringify(newUser.skills);
-                
+
                 return hasChanged ? newUser : prevUser;
               });
             }
