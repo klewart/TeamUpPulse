@@ -30,6 +30,7 @@ const NotificationDropdown = () => {
     if (!currentUser) return;
 
     const notifRef = collection(db, 'notifications');
+    // Reverting to simple query to avoid composite index requirements for now
     const q = query(
       notifRef,
       where('userId', '==', currentUser.uid)

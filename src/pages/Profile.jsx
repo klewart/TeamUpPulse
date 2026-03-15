@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db, storage } from '../services/firebase';
+import { db } from '../services/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Plus, Save, Loader2, CheckCircle2, AlertTriangle, Cpu, Camera, User } from 'lucide-react';
 import SkillTag from '../components/SkillTag';
 import ProfileCard from '../components/ProfileCard';
@@ -120,9 +119,31 @@ const Profile = () => {
       setUploading(true);
       setError('');
       
-      const storageRef = ref(storage, `profile_pics/${currentUser.uid}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+      if (!cloudName || !uploadPreset) {
+        setError('Cloudinary credentials missing in .env. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET.');
+        setUploading(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Cloudinary upload failed');
+      }
+
+      const data = await response.json();
+      const downloadURL = data.secure_url;
       
       // Update Firestore immediately
       await updateDoc(doc(db, 'users', currentUser.uid), {

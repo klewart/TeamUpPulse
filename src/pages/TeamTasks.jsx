@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ArrowLeft, Loader2, ListTodo, AlertTriangle, Plus, Users, User, CheckCircle2 } from 'lucide-react';
+import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
+import { ArrowLeft, Loader2, ListTodo, AlertTriangle, Plus, Users, User, CheckCircle2, Sparkles } from 'lucide-react';
 import TaskCard from '../components/TaskCard';
+import BottleneckAnalyzer from '../components/BottleneckAnalyzer';
 
 const TeamTasks = () => {
   const { id } = useParams();
@@ -124,7 +125,7 @@ const TeamTasks = () => {
       await addDoc(collection(db, 'notifications'), {
         userId: newTaskAssignee,
         type: 'task_assigned',
-        title: 'New Task Assigned',
+        title: `Task Assigned: ${team.teamName}`,
         message: `You were assigned "${newTaskTitle.trim()}" in ${team.teamName}.`,
         link: `/team/${id}/tasks`,
         isRead: false,
@@ -150,24 +151,37 @@ const TeamTasks = () => {
        
        if (newStatus === 'completed') {
          updateData.completedAt = serverTimestamp();
+       } else {
+         // Clear completedAt if moved back to todo or in-progress
+         updateData.completedAt = deleteField();
        }
        
        await updateDoc(taskRef, updateData);
 
-       // Notify the assignee about the status change
-       const updatedTaskSnapshot = await getDoc(taskRef);
-       const updatedTask = updatedTaskSnapshot.exists() ? updatedTaskSnapshot.data() : null;
-       if (updatedTask && updatedTask.assignedTo) {
-         await addDoc(collection(db, 'notifications'), {
-           userId: updatedTask.assignedTo,
-           type: 'task_updated',
-           title: 'Task Status Updated',
-           message: `${currentUser.displayName || 'Someone'} marked "${updatedTask.title}" as ${newStatus.replace('-', ' ')}.`,
-           link: `/team/${id}/tasks`,
-           isRead: false,
-           createdAt: serverTimestamp(),
-         });
-       }
+        // 5. Notify the entire team (except the performer)
+        const updatedTaskSnapshot = await getDoc(taskRef);
+        const updatedTask = updatedTaskSnapshot.exists() ? updatedTaskSnapshot.data() : null;
+        
+        if (updatedTask && teamMembers.length > 0) {
+          const notificationData = {
+            type: 'task_updated',
+            title: `Task Updated: ${team.teamName}`,
+            message: `${currentUser.displayName || 'Someone'} marked "${updatedTask.title}" as ${newStatus.replace('-', ' ')}.`,
+            link: `/team/${id}/tasks`,
+            isRead: false,
+            createdAt: serverTimestamp(),
+          };
+
+          // Create notifications for all other team members
+          const notificationPromises = teamMembers
+            .filter(member => member.id !== currentUser.uid)
+            .map(member => addDoc(collection(db, 'notifications'), {
+              ...notificationData,
+              userId: member.id,
+            }));
+
+          await Promise.all(notificationPromises);
+        }
      } catch (err) {
        console.error("Error updating status", err);
        alert("Failed to update status.");
@@ -176,6 +190,15 @@ const TeamTasks = () => {
   };
 
   // 4. Analytics Calculations
+  const taskFormRef = useRef(null);
+
+  // Auto-scroll to form when opened
+  useEffect(() => {
+    if (showTaskForm && taskFormRef.current) {
+      taskFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [showTaskForm]);
+
   const todoTasks = tasks.filter(t => t.status === 'todo');
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
   const completedTasks = tasks.filter(t => t.status === 'completed');
@@ -220,7 +243,11 @@ const TeamTasks = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
-           <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors hidden sm:block">
+          <button 
+            onClick={() => navigate(`/team/${id}`)}
+            className="p-2 -ml-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors hidden sm:block"
+            title="Back to Team"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
@@ -232,17 +259,36 @@ const TeamTasks = () => {
           </div>
         </div>
         
-        <button 
-          onClick={() => setShowTaskForm(!showTaskForm)}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm ${
-            showTaskForm 
-              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' 
-              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-          }`}
-        >
-          {showTaskForm ? 'Cancel' : <><Plus className="w-5 h-5" /> Add Task</>}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('triggerAIChat', { detail: { projectId: id } }));
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
+          >
+            <Sparkles className="w-5 h-5 text-indigo-500" /> Ask AI for help
+          </button>
+          <button 
+            onClick={() => setShowTaskForm(!showTaskForm)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm ${
+              showTaskForm 
+                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' 
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+            }`}
+          >
+            {showTaskForm ? 'Cancel' : <><Plus className="w-5 h-5" /> Add Task</>}
+          </button>
+        </div>
       </div>
+
+      {/* AI Bottleneck Analysis - Only for Creator */}
+      {team && currentUser?.uid === team.createdBy && (
+        <BottleneckAnalyzer 
+          tasks={tasks} 
+          members={teamMembers} 
+          teamName={team.teamName} 
+        />
+      )}
 
       {/* Analytics Widget */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row gap-8 items-center justify-between">
@@ -283,7 +329,10 @@ const TeamTasks = () => {
 
       {/* Task Creation Form Dropdown */}
       {showTaskForm && (
-        <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 shadow-inner mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div 
+          ref={taskFormRef}
+          className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 shadow-inner mb-8 animate-in fade-in slide-in-from-top-4 duration-300"
+        >
            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
              <Plus className="w-5 h-5 text-indigo-500" /> Create New Assignment
            </h3>
@@ -304,14 +353,24 @@ const TeamTasks = () => {
                   ))}
                 </select>
               </div>
-              <button 
-                type="submit" 
-                disabled={isSubmitting || !newTaskTitle.trim() || !newTaskAssignee}
-                className="mt-2 w-full md:w-auto self-start bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : <CheckCircle2 className="w-5 h-5"/>}
-                Publish Task
-              </button>
+              
+              <div className="flex items-center gap-3 mt-2">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting || !newTaskTitle.trim() || !newTaskAssignee}
+                  className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : <CheckCircle2 className="w-5 h-5"/>}
+                  Publish Task
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowTaskForm(false)}
+                  className="px-6 py-2.5 rounded-xl font-medium text-slate-500 hover:bg-slate-200/50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
            </form>
         </div>
       )}

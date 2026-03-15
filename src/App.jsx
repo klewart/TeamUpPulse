@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { playNotificationSound } from './utils/soundUtils';
 import MainLayout from './layouts/MainLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -21,6 +22,23 @@ import AIMentorChatbot from './components/AIMentorChatbot';
 
 const AuthContent = () => {
   const { currentUser } = useAuth();
+
+  // "Unlock" audio on first user interaction (Browser requirement)
+  useEffect(() => {
+    const unlockAudio = () => {
+      // Trigger a silent sound to warm up the engine
+      playNotificationSound();
+      window.removeEventListener('mousedown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+    window.addEventListener('mousedown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('mousedown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
   return (
     <>
       <Toaster />

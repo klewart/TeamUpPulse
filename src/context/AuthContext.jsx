@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }) => {
           if (!docSnap.exists()) {
             await setDoc(profileRef, {
               uid: user.uid,
-              name: user.displayName || 'User',
+              name: 'New User',
               email: user.email,
               bio: '',
               skills: [],
@@ -103,9 +103,9 @@ export const AuthProvider = ({ children }) => {
               const newUser = {
                 uid: user.uid,
                 email: user.email,
-                displayName: profileData.name || user.displayName || 'User',
-                name: profileData.name || user.displayName || 'User',
-                photoURL: profileData.photoURL || user.photoURL || null,
+                displayName: profileData.name || 'User',
+                name: profileData.name || 'User',
+                photoURL: profileData.photoURL || null,
                 ...profileData,
               };
 

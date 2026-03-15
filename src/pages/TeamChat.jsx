@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc, arrayUnion, setDoc } from 'firebase/firestore';
 import { ArrowLeft, Loader2, MessageSquare, AlertTriangle } from 'lucide-react';
 import ChatWindow from '../components/ChatWindow';
 import ChatInput from '../components/ChatInput';
+import { playNotificationSound } from '../utils/soundUtils';
 
 const TeamChat = () => {
   const { id } = useParams();
@@ -14,8 +15,10 @@ const TeamChat = () => {
   
   const [team, setTeam] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [userPrefs, setUserPrefs] = useState({ clearedAt: null, deletedIds: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const isInitial = useRef(true);
   
   // 1. Real-time Access Check & Team Loading
   useEffect(() => {
@@ -50,7 +53,23 @@ const TeamChat = () => {
     return () => unsubscribe();
   }, [id, currentUser]);
 
-  // 2. Real-time Firestore Listener for Messages
+  // 1.1 Real-time User-specific Chat Preferences (Local Deletions)
+  useEffect(() => {
+    if (!currentUser || !id) return;
+
+    const prefsRef = doc(db, 'teams', id, 'userChatPrefs', currentUser.uid);
+    const unsubscribe = onSnapshot(prefsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setUserPrefs(docSnap.data());
+      } else {
+        setUserPrefs({ clearedAt: null, deletedIds: [] });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [id, currentUser]);
+
+  // 2. Real-time Firestore Listener for Messages (Filtered by User Prefs)
   useEffect(() => {
     // Only subscribe if team is loaded and access is granted
     if (!team || error) return;
@@ -63,11 +82,47 @@ const TeamChat = () => {
 
     // Subscribe to live updates
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMessages = [];
-      snapshot.forEach((doc) => {
-        fetchedMessages.push({ id: doc.id, ...doc.data() });
+      const allMessages = [];
+      let hasNewMessage = false;
+      
+      const clearedAtMillis = userPrefs?.clearedAt?.toMillis?.() || 0;
+      const deletedIds = userPrefs?.deletedIds || [];
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const data = change.doc.data();
+          const docId = change.doc.id;
+          
+          // Filter logic for sound: only if not own and not already deleted/cleared
+          const isDeletedLocally = deletedIds.includes(docId);
+          const createdAtMillis = data.createdAt?.toMillis?.() || 0;
+          const isClearedLocally = clearedAtMillis > 0 && createdAtMillis > 0 && createdAtMillis <= clearedAtMillis;
+          
+          if (data.senderId !== currentUser?.uid && !isInitial.current && !isDeletedLocally && !isClearedLocally) {
+            hasNewMessage = true;
+          }
+        }
       });
-      setMessages(fetchedMessages);
+
+      if (hasNewMessage) playNotificationSound();
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const msgId = doc.id;
+        
+        // APPLY FILTERS
+        const isDeletedLocally = deletedIds.includes(msgId);
+        const createdAtMillis = data.createdAt?.toMillis?.() || 0;
+        const isClearedLocally = clearedAtMillis > 0 && createdAtMillis > 0 && createdAtMillis <= clearedAtMillis;
+
+        if (!isDeletedLocally && !isClearedLocally) {
+          allMessages.push({ id: msgId, ...data });
+        }
+      });
+      
+      setMessages(allMessages);
+      
+      if (isInitial.current) isInitial.current = false;
       setLoading(false);
     }, (err) => {
       console.error("Chat subscription error:", err);
@@ -77,7 +132,7 @@ const TeamChat = () => {
 
     // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, [team, error, id]);
+  }, [team, error, id, userPrefs]);
 
   // 3. Send Message Logic
   const handleSendMessage = async (text, file = null) => {
@@ -100,7 +155,7 @@ const TeamChat = () => {
         formData.append('file', file);
         formData.append('upload_preset', uploadPreset);
 
-        // Fetch API for Cloudinary unsigned upload
+        // Fetch API for Cloudinary unsigned upload (using 'auto' for reliable detection)
         const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
           method: 'POST',
           body: formData
@@ -117,7 +172,8 @@ const TeamChat = () => {
           fileUrl: data.secure_url,
           fileName: file.name,
           fileType: file.type,
-          fileSize: file.size
+          fileSize: file.size,
+          resourceType: data.resource_type
         };
       }
 
@@ -137,7 +193,7 @@ const TeamChat = () => {
           addDoc(collection(db, 'notifications'), {
             userId: memberId,
             type: 'new_message',
-            title: `New message from ${currentUser.name || 'a teammate'}`,
+            title: `Team Chat: New Message`,
             message: `${currentUser.name || 'Someone'} sent a message in ${team.teamName}.`,
             link: `/team/${team.id}/chat`,
             isRead: false,
@@ -149,6 +205,65 @@ const TeamChat = () => {
     } catch (err) {
       console.error("Failed to send message:", err);
       throw err; // Re-throw to be handled by ChatInput
+    }
+  };
+
+  const handleDeleteMessage = async (messageId, mode = 'everyone') => {
+    try {
+      if (mode === 'everyone') {
+        const messageRef = doc(db, 'teams', id, 'messages', messageId);
+        await deleteDoc(messageRef);
+      } else {
+        // Delete for Me (Local)
+        const prefsRef = doc(db, 'teams', id, 'userChatPrefs', currentUser.uid);
+        await updateDoc(prefsRef, {
+          deletedIds: arrayUnion(messageId)
+        }).catch(async (err) => {
+          // If doc doesn't exist, create it
+          if (err.code === 'not-found') {
+            await setDoc(prefsRef, {
+              deletedIds: [messageId],
+              clearedAt: null
+            });
+          } else throw err;
+        });
+      }
+    } catch (err) {
+      console.error("Failed to delete message:", err);
+      alert("Error deleting message. Please try again.");
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!window.confirm("Are you sure you want to clear your local chat history? This cannot be undone, but will not affect other members.")) return;
+    try {
+      const prefsRef = doc(db, 'teams', id, 'userChatPrefs', currentUser.uid);
+      await updateDoc(prefsRef, {
+        clearedAt: serverTimestamp(),
+        deletedIds: [] // Can reset deletedIds since clearedAt covers all previous
+      }).catch(async (err) => {
+        if (err.code === 'not-found') {
+          await setDoc(prefsRef, {
+            clearedAt: serverTimestamp(),
+            deletedIds: []
+          });
+        } else throw err;
+      });
+    } catch (err) {
+      console.error("Failed to clear chat:", err);
+      alert("Error clearing chat. Please try again.");
+    }
+  };
+
+  const handleTogglePin = async (messageId, currentStatus) => {
+    try {
+      const messageRef = doc(db, 'teams', id, 'messages', messageId);
+      await updateDoc(messageRef, {
+        isPinned: !currentStatus
+      });
+    } catch (err) {
+      console.error("Failed to toggle pin:", err);
+      alert("Error pinning message. Please try again.");
     }
   };
 
@@ -176,9 +291,9 @@ const TeamChat = () => {
       <div className="bg-white px-4 sm:px-6 py-4 flex items-center justify-between border-b md:border md:rounded-t-2xl border-gray-100 shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/team/${id}`)}
             className="p-2 -ml-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors"
-            title="Go Back"
+            title="Back to Team"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -210,7 +325,11 @@ const TeamChat = () => {
         <ChatWindow 
           messages={messages} 
           currentUserId={currentUser?.uid} 
-          loading={loading && messages.length === 0} 
+          loading={loading && messages.length === 0}
+          isTeamCreator={team?.createdBy === currentUser?.uid}
+          onDeleteMessage={handleDeleteMessage}
+          onTogglePin={handleTogglePin}
+          onClearChat={handleClearChat}
         />
         <div className="shrink-0 w-full mt-auto">
             <ChatInput 

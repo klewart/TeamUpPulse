@@ -4,6 +4,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { playNotificationSound } from '../utils/soundUtils';
 
 /**
  * Headless component that listens for new notifications in Firestore
@@ -18,54 +19,49 @@ const NotificationToastListener = () => {
     if (!currentUser) return;
 
     const notifRef = collection(db, 'notifications');
+    // Simplified query to bypass composite index requirement
     const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', currentUser.uid),
-      limit(20) // Get more to sort locally
+      notifRef,
+      where('userId', '==', currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Use pending snapshot metadata to ignore initial bulk load
+      if (snapshot.metadata.hasPendingWrites) return;
+      
       if (isInitial.current) {
         isInitial.current = false;
         return;
       }
 
-      const docChanges = snapshot.docChanges();
-      // Sort changes by date if they have timestamps to process latest first
-      const sortedChanges = [...docChanges].sort((a, b) => {
-        const timeA = a.doc.data().createdAt?.toMillis() || 0;
-        const timeB = b.doc.data().createdAt?.toMillis() || 0;
-        return timeB - timeA;
-      });
-
-      sortedChanges.forEach((change) => {
+      snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
 
-          // Suppression Logic: Don't show toast if user is already on the linked page
-          // BUT: Always show for high-priority types like 'team_invite'
-          const isCurrentPage = data?.link === location?.pathname;
-          const isHighPriority = data?.type === 'team_invite';
-
-          if (!data?.isRead && (!isCurrentPage || isHighPriority)) {
-            toast(
-              (t) => (
-                <div className="flex flex-col gap-1">
-                  <span className="font-bold text-slate-900">{data?.title || 'Notification'}</span>
-                  <span className="text-sm text-slate-500 line-clamp-2">{data?.message || ''}</span>
-                </div>
-              ),
+          // SUPPRESSION LOGIC: Don't show toast if user is already on the target page
+          // This prevents annoying toasts for the chat you are actively reading.
+          const isCurrentActivePage = data.link === location.pathname;
+          
+          if (!data?.isRead && !isCurrentActivePage) {
+            console.log("🔔 Toasting new notification:", data);
+            try {
+              playNotificationSound();
+            } catch (e) {
+              console.error("🔇 Sound failed:", e);
+            }
+            toast.success(
+              `${data?.title}: ${data?.message}`,
               {
-                duration: 4000,
+                duration: 5000,
                 position: 'top-right',
                 icon: '🔔',
                 style: {
-                  background: '#fff',
-                  color: '#334155',
-                  borderRadius: '16px',
-                  border: '1px solid #f1f5f9',
-                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-                  padding: '16px',
+                  background: '#1e293b',
+                  color: '#fff',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
                 },
               }
             );

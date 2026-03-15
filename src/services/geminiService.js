@@ -1,13 +1,19 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { db } from './firebase';
 import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
-// Initialize the Gemini API client
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const ai = new GoogleGenerativeAI({ apiKey: apiKey || '' });
+// Initialize the Groq API client
+const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
+const groq = new Groq({ 
+  apiKey: groqApiKey || '',
+  dangerouslyAllowBrowser: true // Required for client-side usage in Vite
+});
+
+// For backward compatibility if any code still expects 'apiKey'
+const apiKey = groqApiKey;
 
 // System instructions to guide the AI's behavior as a Project Mentor
-const SYSTEM_INSTRUCTION = `
+export const GLOBAL_SYSTEM_INSTRUCTION = `
 You are an expert AI Project Mentor for the TeamUpPulse platform. Your goal is to help students generate project ideas, plan projects, solve doubts, and guide them in completing projects successfully.
 You should be encouraging, structured, informative, and student-friendly. Use markdown for better formatting.
 
@@ -37,51 +43,125 @@ When advising on project completion strategy:
 
 Smart Suggestions:
 - Always suggest possible project challenges, future improvements, optimization ideas, and similar successful project examples when relevant.
+
+App Navigation Help:
+- /dashboard: Viewing their teams and recommendations.
+- /profile: Managing skills and account.
+- /teams: Browsing or joining open projects.
+- /create-team: Starting a new project.
+- /team/:id: Viewing a specific team's details.
+- /team/:id/chat: Team group chat.
+- /team/:id/tasks: Team kanban board.
+`;
+
+export const PROJECT_SYSTEM_INSTRUCTION = (projectData) => `
+${GLOBAL_SYSTEM_INSTRUCTION}
+
+CRITICAL CONTEXT: You are currently acting as the dedicated **Project Manager & Technical Lead** for this specific project:
+- **Project Name**: ${projectData.teamName}
+- **Description**: ${projectData.description}
+- **Topic**: ${projectData.projectTopic}
+- **Required Skills**: ${projectData.requiredSkills?.join(', ')}
+- **Team Progress**: ${projectData.progress}% (${projectData.completedTasks} tasks completed out of ${projectData.totalTasks})
+
+Your goal is to provide advice EXCLUSIVELY tailored to this project's goals, tech stack, and current progress. Be proactive in suggesting next steps based on the task board.
 `;
 
 /**
- * Initializes a chat session with the Gemini model.
- * 
- * @param {Array} history - Previous chat history in the format [{role: 'user'|'model', parts: [{text: '...'}]}]
- * @param {string} systemInstruction - Optional context to prepend/configure the model.
- * @returns {Object} The initialized chat session object.
+ * Initializes a "chat session". Since Groq is stateless, we just return an object 
+ * that holds the history and system instructions.
  */
-export const initializeMentorChat = (history = [], systemInstruction = SYSTEM_INSTRUCTION) => {
-  if (!apiKey) {
-    console.error("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file.");
-  }
-
-  // Choose the model that supports chat and system instructions (gemini-1.5-flash is recommended for general chat)
-  const model = ai.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    systemInstruction,
-  });
-
-  // Start chat with history
-  const chatSession = model.startChat({
+export const initializeMentorChat = (history = [], systemInstruction = GLOBAL_SYSTEM_INSTRUCTION) => {
+  return {
     history: history,
-  });
+    systemInstruction: systemInstruction
+  };
+};
 
-  return chatSession;
+export const generateMentorResponse = async (chatSession, message, fileData = null) => {
+  try {
+    if (!groqApiKey) {
+      return "⚠️ Error: Groq API key is not configured.";
+    }
+
+    // Prepare content based on whether there's an image or extracted text (PDFs)
+    let userContent = message;
+    
+    if (fileData && fileData.mimeType.startsWith('image/')) {
+      userContent = [
+        { type: "text", text: message },
+        { 
+          type: "image_url", 
+          image_url: { url: `data:${fileData.mimeType};base64,${fileData.data}` } 
+        }
+      ];
+    } else if (fileData && fileData.extractedText) {
+      // For PDFs or text files, we append the content to the prompt
+      userContent = `[ATTACHED DOCUMENT: ${fileData.name}]\n\nCONTENT:\n${fileData.extractedText}\n\nUSER MESSAGE: ${message}`;
+    }
+
+    // Prepare messages for Groq format
+    const messages = [
+      { role: "system", content: chatSession.systemInstruction || GLOBAL_SYSTEM_INSTRUCTION },
+      ...chatSession.history.map(h => ({
+        role: h.role === 'model' ? 'assistant' : 'user',
+        content: h.parts[0].text
+      })),
+      { role: "user", content: userContent }
+    ];
+
+    // Note: Free tier Groq models have limited vision support. 
+    // We've moved to Llama 4 Scout as the previous 3.2 vision model was decommissioned.
+    const model = fileData ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
+
+    const completion = await groq.chat.completions.create({
+      messages: messages,
+      model: model,
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
+
+    const responseText = completion.choices[0]?.message?.content || "";
+    
+    // Update local session history (optional but helps component if it reuses the object)
+    chatSession.history.push({ role: 'user', parts: [{ text: message }] });
+    chatSession.history.push({ role: 'model', parts: [{ text: responseText }] });
+
+    return responseText;
+  } catch (error) {
+    console.error("Error generating mentor response:", error);
+    return `⚠️ AI Error: ${error.message || "Unknown error during generation"}. Please ensure your Groq API key is valid.`;
+  }
 };
 
 /**
- * Generates a response from the AI Mentor.
- * 
- * @param {Object} chatSession - The active chat session initialized from `initializeMentorChat`.
- * @param {string} message - The user's input message.
- * @returns {Promise<string>} The AI's markdown response.
+ * Performs a diagnostic "Hello World" call to verify the API key is working.
+ * @returns {Promise<{success: boolean, message: string}>}
  */
-export const generateMentorResponse = async (chatSession, message) => {
+export const testGeminiConnection = async () => {
+  if (!groqApiKey) {
+    return { success: false, message: "VITE_GROQ_API_KEY is missing in .env" };
+  }
+
   try {
-    if (!apiKey) {
-      return "⚠️ Error: Gemini API key is not configured. Please add `VITE_GEMINI_API_KEY` to your environment variables.";
+    const completion = await groq.chat.completions.create({
+      messages: [
+        { role: "user", content: "Respond exactly with: 'SUCCESS'" }
+      ],
+      model: "llama-3.1-8b-instant",
+    });
+    const text = completion.choices[0]?.message?.content || "";
+    
+    if (text.includes("SUCCESS")) {
+      return { success: true, message: "Groq API key is valid and connected!" };
     }
-    const result = await chatSession.sendMessage(message);
-    return result.response.text();
+    return { success: false, message: "Groq connected but returned unexpected response." };
   } catch (error) {
-    console.error("Error generating mentor response:", error);
-    return "I'm sorry, I encountered an error while trying to generate a response. Please try again later.";
+    console.error("Diagnostic Error:", error);
+    return { 
+      success: false, 
+      message: error.message || "Failed to connect to Groq API."
+    };
   }
 };
 

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Loader2, Award, Briefcase, Zap, Check, X, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
 
 import Sidebar from '../components/Sidebar';
 import ProfileSummary from '../components/ProfileSummary';
@@ -87,46 +87,41 @@ const Dashboard = () => {
     }
   }, [dataLoaded]);
 
-  // 2. Fetch recommendations (One-time or on skill change, NOT on every team update)
+  // 2. Real-time Recommendations (updates when joinRequests or members change)
   useEffect(() => {
-    const fetchRecommendations = async () => {
-      if (!currentUser?.skills || currentUser.skills.length === 0) {
-        setRecommendedTeams([]);
-        return;
-      }
-
-      try {
-        const teamsRef = collection(db, 'teams');
-        const allTeamsSnap = await getDocs(teamsRef);
-        const recommendations = [];
-
-        allTeamsSnap.forEach(doc => {
-          const tData = doc.data();
-          const isMember = tData.members?.includes(currentUser.uid);
-          const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
-
-          if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
-            const matchResult = calculateSkillMatch(currentUser.skills, tData.requiredSkills || []);
-            if (matchResult.score > 0) {
-              recommendations.push({
-                id: doc.id,
-                ...tData,
-                matchResult
-              });
-            }
-          }
-        });
-
-        recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
-        setRecommendedTeams(recommendations.slice(0, 3));
-      } catch (err) {
-        console.error("Failed to fetch recommendations:", err);
-      }
-    };
-
-    if (currentUser) {
-      fetchRecommendations();
+    if (!currentUser?.uid || !currentUser?.skills || currentUser.skills.length === 0) {
+      setRecommendedTeams([]);
+      return;
     }
+
+    const teamsRef = collection(db, 'teams');
+    const unsubscribe = onSnapshot(teamsRef, (snapshot) => {
+      const recommendations = [];
+
+      snapshot.forEach(doc => {
+        const tData = doc.data();
+        const isMember = tData.members?.includes(currentUser.uid);
+        const isFull = (tData.members?.length || 0) >= (tData.maxMembers || 0);
+
+        if (!isMember && !isFull && tData.createdBy !== currentUser.uid) {
+          const matchResult = calculateSkillMatch(currentUser.skills, tData.requiredSkills || []);
+          if (matchResult.score > 0) {
+            recommendations.push({
+              id: doc.id,
+              ...tData,
+              matchResult
+            });
+          }
+        }
+      });
+
+      recommendations.sort((a, b) => b.matchResult.score - a.matchResult.score);
+      setRecommendedTeams(recommendations.slice(0, 3));
+    }, (err) => {
+      console.error("Recommendations listener error:", err);
+    });
+
+    return () => unsubscribe();
   }, [currentUser?.uid, currentUser?.skills]);
 
   const handleAcceptInvite = async (invite) => {
@@ -142,6 +137,17 @@ const Dashboard = () => {
       const inviteRef = doc(db, 'teamInvites', invite.id);
       await updateDoc(inviteRef, {
         status: 'accepted'
+      });
+
+      // Notify the Team Creator that someone joined
+      await addDoc(collection(db, 'notifications'), {
+        userId: invite.senderId, // The person who sent the invite (creator/lead)
+        type: 'info',
+        title: 'New Member Joined!',
+        message: `${currentUser.name || 'A user'} accepted your invite to join ${invite.projectName}.`,
+        link: `/team/${invite.projectId}`,
+        isRead: false,
+        createdAt: serverTimestamp()
       });
 
       setLoading(false);

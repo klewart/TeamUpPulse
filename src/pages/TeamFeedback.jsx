@@ -204,7 +204,11 @@ const TeamFeedback = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
-           <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors hidden sm:block">
+          <button 
+            onClick={() => navigate(`/team/${id}`)}
+            className="p-2 -ml-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors hidden sm:block"
+            title="Back to Team"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>

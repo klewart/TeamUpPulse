@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
-import { Loader2, Users, ArrowLeft, UserPlus, CheckCircle2, MessageSquare, ListTodo, Star, UserMinus, LogOut, Trash2, Hourglass, X, Check, Search } from 'lucide-react';
+import { Loader2, Users, ArrowLeft, UserPlus, CheckCircle2, MessageSquare, ListTodo, Star, UserMinus, LogOut, Trash2, Hourglass, X, Check, Search, Sparkles } from 'lucide-react';
 import SkillTag from '../components/SkillTag';
 import { calculateSkillMatch } from '../utils/matchUtils';
 
@@ -278,6 +278,17 @@ const TeamDetails = () => {
       );
       await Promise.all(notificationPromises);
 
+      // Also notify the Creator (currentUser) for explicit feedback (toast + sound)
+      await addDoc(collection(db, 'notifications'), {
+        userId: currentUser.uid,
+        type: 'info',
+        title: 'Member Added Successfully!',
+        message: `${acceptedUser?.name || 'A new user'} is now part of ${team.teamName}.`,
+        link: `/team/${team.id}`,
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
     } catch (err) {
       alert('Failed to accept request: ' + err.message);
     } finally {
@@ -333,6 +344,31 @@ const TeamDetails = () => {
         members: prev.members.filter(id => id !== memberId)
       }));
       setMemberData(prev => prev.filter(member => member.uid !== memberId));
+
+      // Notify the removed member
+      await addDoc(collection(db, 'notifications'), {
+        userId: memberId,
+        type: 'info',
+        title: 'Removed from Team',
+        message: `You have been removed from the team "${team.teamName}".`,
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      // Notify all other remaining members
+      const remainingMembers = team.members.filter(m => m !== memberId && m !== currentUser.uid);
+      const notificationPromises = remainingMembers.map(mId =>
+        addDoc(collection(db, 'notifications'), {
+          userId: mId,
+          type: 'info',
+          title: 'Team Member Removed',
+          message: `${memberName} has been removed from "${team.teamName}".`,
+          link: `/team/${team.id}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        })
+      );
+      await Promise.all(notificationPromises);
     } catch (err) {
       alert('Failed to remove member: ' + err.message);
     } finally {
@@ -352,6 +388,34 @@ const TeamDetails = () => {
         joinRequests: arrayRemove(currentUser.uid)
       });
 
+      // Notify the creator
+      if (team.createdBy !== currentUser.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          userId: team.createdBy,
+          type: 'info',
+          title: 'Member Left Team',
+          message: `${currentUser.name || 'A user'} has left the team "${team.teamName}".`,
+          link: `/team/${team.id}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      // Notify remaining members
+      const remainingOthers = team.members.filter(m => m !== currentUser.uid && m !== team.createdBy);
+      const notifPromises = remainingOthers.map(mId =>
+        addDoc(collection(db, 'notifications'), {
+          userId: mId,
+          type: 'info',
+          title: 'Team Member Left',
+          message: `${currentUser.name || 'A user'} has left "${team.teamName}".`,
+          link: `/team/${team.id}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        })
+      );
+      await Promise.all(notifPromises);
+
       // Because we are using onSnapshot, we don't necessarily need to update 
       // the local state manually, but it's okay if we just let the listener handle it.
 
@@ -368,6 +432,23 @@ const TeamDetails = () => {
     try {
       setActionLoading(true);
       const teamRef = doc(db, 'teams', team.id);
+
+      // Notify all team members (except creator) before deleting
+      const membersToNotify = (team.members || []).filter(uid => uid !== currentUser.uid);
+      
+      if (membersToNotify.length > 0) {
+        const notifPromises = membersToNotify.map(memberId => 
+          addDoc(collection(db, 'notifications'), {
+            userId: memberId,
+            type: 'team_deleted',
+            title: 'Team Deleted',
+            message: `The team "${team.teamName}" has been deleted by its creator.`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          })
+        );
+        await Promise.all(notifPromises);
+      }
 
       await deleteDoc(teamRef);
       navigate('/dashboard');
@@ -390,7 +471,7 @@ const TeamDetails = () => {
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Oops!</h2>
         <p className="text-slate-600">{error || "Something went wrong."}</p>
-        <button onClick={() => navigate(-1)} className="mt-6 text-blue-600 font-medium hover:underline">
+        <button onClick={() => navigate('/dashboard')} className="mt-6 text-blue-600 font-medium hover:underline">
           Go Back
         </button>
       </div>
@@ -407,10 +488,10 @@ const TeamDetails = () => {
 
       {/* Back Button */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/dashboard')}
         className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors font-medium mb-6"
       >
-        <ArrowLeft className="w-4 h-4" /> Back
+        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -443,6 +524,14 @@ const TeamDetails = () => {
                       className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-semibold border border-indigo-700 transition-colors shadow-sm text-sm"
                     >
                       <ListTodo className="w-4 h-4" /> Task Board
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('triggerAIChat', { detail: { projectId: team.id } }));
+                      }}
+                      className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-bold border border-indigo-700 transition-all shadow-md shadow-indigo-100 text-sm animate-pulse-subtle"
+                    >
+                      <Sparkles className="w-4 h-4" /> Use AI
                     </button>
                     <button
                       onClick={() => navigate(`/team/${team.id}/chat`)}

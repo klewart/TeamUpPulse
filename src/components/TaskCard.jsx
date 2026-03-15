@@ -37,38 +37,40 @@ const TaskCard = ({ task, currentUserId, onStatusChange }) => {
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-4 relative group hover:border-blue-300 hover:shadow-md transition-all ${isUpdating ? 'opacity-50' : ''}`}>
       
-      {/* Context Action Menu */}
-      <div className="absolute top-3 right-3">
-        <button 
-          onClick={() => setShowDropdown(!showDropdown)}
-          className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-50 opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-5 h-5" />}
-        </button>
-        
-        {showDropdown && (
-          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-10 text-sm">
-            <button
-              onClick={() => handleStatusChange('todo')}
-              className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium"
-            >
-              Set To Do
-            </button>
-            <button
-              onClick={() => handleStatusChange('in-progress')}
-              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-blue-700 font-medium"
-            >
-              Set In Progress
-            </button>
-            <button
-              onClick={() => handleStatusChange('completed')}
-              className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700 font-medium"
-            >
-              Set Completed
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Context Action Menu - Only for assigned member */}
+      {isAssignedToMe && (
+        <div className="absolute top-3 right-3">
+          <button 
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-50 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-5 h-5" />}
+          </button>
+          
+          {showDropdown && (
+            <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-10 text-sm">
+              <button
+                onClick={() => handleStatusChange('todo')}
+                className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium"
+              >
+                Set To Do
+              </button>
+              <button
+                onClick={() => handleStatusChange('in-progress')}
+                className="w-full text-left px-4 py-2 hover:bg-blue-50 text-blue-700 font-medium"
+              >
+                Set In Progress
+              </button>
+              <button
+                onClick={() => handleStatusChange('completed')}
+                className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700 font-medium"
+              >
+                Set Completed
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="pr-6">
         <h4 className="font-bold text-slate-900 leading-tight mb-1">{title}</h4>
